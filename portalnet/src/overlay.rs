@@ -545,25 +545,6 @@ where
         if target == self.local_enr().node_id() {
             return vec![self.local_enr()];
         }
-        let connected_peer = self
-            .kbuckets
-            .write()
-            .iter()
-            .filter(|entry| entry.status.is_connected())
-            .map(|entry| *entry.node.key.preimage())
-            .find(|node_id| node_id == &target);
-        if let Some(entry) = connected_peer {
-            match self.discovery.find_enr(&entry) {
-                Some(enr) => return vec![enr],
-                None => {
-                    warn!(
-                        protocol = %self.protocol,
-                        "Error finding ENR for node expected to exist in local routing table",
-                    );
-                    return vec![];
-                }
-            }
-        };
         let (tx, rx) = oneshot::channel();
         if let Err(err) = self.command_tx.send(OverlayCommand::FindNodeQuery {
             target,
