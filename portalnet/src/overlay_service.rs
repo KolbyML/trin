@@ -620,6 +620,7 @@ where
             }
             QueryPoolState::Timeout(query_id, query_info, query) => {
                 warn!(query.id = %query_id, "Query timed out");
+                info!("tddpiperrequest: timeout:: {:?}", query.target());
                 Poll::Ready(QueryEvent::TimedOut(query_id, query_info, query))
             }
             QueryPoolState::Waiting(Some((query_id, query_info, query, return_peer))) => {
