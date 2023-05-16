@@ -674,6 +674,7 @@ where
             // Query has ended.
             QueryEvent::Finished(query_id, mut query_info, query)
             | QueryEvent::TimedOut(query_id, mut query_info, query) => {
+                let target_node_id = query.target();
                 let result = query.into_result();
                 // Obtain the ENRs for the resulting nodes.
                 let mut found_enrs = Vec::new();
@@ -700,6 +701,11 @@ where
                     ..
                 } = query_info.query_type
                 {
+                    for zz in found_enrs.clone().into_iter() {
+                        let key: Key<NodeId> = zz.node_id().clone().into();
+                        let distance = key.distance(&target_node_id);
+                        tracing::info!("tddpiperrequest: distances:: {:?},,, {:?}", target_node_id, distance);
+                    }
                     if let Err(err) = callback.send(found_enrs.clone()) {
                         error!(
                             query.id = %query_id,
