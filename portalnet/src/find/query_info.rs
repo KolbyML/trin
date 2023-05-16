@@ -58,6 +58,7 @@ impl<TContentKey: OverlayContentKey> QueryInfo<TContentKey> {
             } => {
                 let distances = findnode_log2distance(target, peer, distances_to_request)
                     .ok_or("Requested a node find itself")?;
+                tracing::info!("tddpiperrequest: node contacted:: {:?}", target);
                 Request::FindNodes(FindNodes { distances })
             }
             QueryType::FindContent { ref target, .. } => Request::FindContent(FindContent {
