@@ -1,51 +1,17 @@
+use std::collections::BTreeMap;
 use async_trait::async_trait;
-use discv5::{
-    enr::NodeId,
-    kbucket::{
-        Entry, FailureReason, Filter, InsertResult, KBucketsTable, Key, NodeStatus,
-        MAX_NODES_PER_BUCKET,
-    },
-    ConnectionDirection, ConnectionState, TalkRequest,
-};
-use futures::channel::oneshot;
-use parking_lot::RwLock;
-use ssz::Encode;
-use std::{
-    collections::{BTreeMap, HashSet},
-    fmt::{Debug, Display},
-    marker::{PhantomData, Sync},
-    sync::Arc,
-    time::Duration,
-};
-use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, info, warn};
-use utp_rs::socket::UtpSocket;
-
-use crate::{
-    discovery::{Discovery, UtpEnr},
-    metrics::{MessageDirectionLabel, MessageLabel, OverlayMetrics, ProtocolLabel},
-    overlay_service::{
-        OverlayCommand, OverlayRequest, OverlayRequestError, OverlayService, RequestDirection,
-        UTP_CONN_CFG,
-    },
-    storage::ContentStore,
-    types::{
-        messages::{
-            Accept, Content, CustomPayload, FindContent, FindNodes, Message, Nodes, Offer, Ping,
-            Pong, PopulatedOffer, ProtocolId, Request, Response,
-        },
-        node::Node,
-    },
-};
+use discv5::{enr::NodeId, kbucket::{
+    Entry, FailureReason, Filter, InsertResult, KBucketsTable, Key, NodeStatus,
+    MAX_NODES_PER_BUCKET,
+}, ConnectionDirection, ConnectionState, TalkRequest, Enr};
+use ethportal_api::OverlayContentKey;
 use ethportal_api::types::content_key::RawContentKey;
-use ethportal_api::types::distance::{Distance, Metric, XorMetric};
-use ethportal_api::types::enr::Enr;
-use ethportal_api::utils::bytes::hex_encode;
-use ethportal_api::BeaconContentKey;
+use ethportal_api::types::distance::Distance;
 use ethportal_api::types::query_trace::QueryTrace;
+use crate::overlay_service::OverlayRequestError;
+use crate::types::messages::{Accept, Content, Nodes, Pong, ProtocolId, Response};
 
-use crate::overlay::OverlayProtocol;
-use crate::storage::PortalStorage;
+pub(crate) type BucketEntry = (NodeId, Enr, NodeStatus, Distance, Option<String>);
 
 /// An encodable portal network content value.
 #[async_trait]
@@ -67,7 +33,7 @@ pub trait Network {
     ) -> Result<Response, OverlayRequestError>;
 
     /// Propagate gossip accepted content via OFFER/ACCEPT, return number of peers propagated
-    fn propagate_gossip(&self, content: Vec<(TContentKey, Vec<u8>)>) -> usize;
+    fn propagate_gossip<T>(&self, content: Vec<(T, Vec<u8>)>) -> usize  where T: 'static + OverlayContentKey + Send + Sync;
 
     /// Returns a vector of all ENR node IDs of nodes currently contained in the routing table.
     fn table_entries_id(&self) -> Vec<NodeId>;
@@ -78,7 +44,7 @@ pub trait Network {
     /// Returns a map (BTree for its ordering guarantees) with:
     ///     key: usize representing bucket index
     ///     value: Vec of tuples, each tuple represents a node
-    fn bucket_entries(&self) -> BTreeMap<usize, Vec<BucketEntry>>;
+    fn bucket_entries(&self) -> BTreeMap<usize, Vec<crate::overlay::BucketEntry>>;
 
     /// `AddEnr` adds requested `enr` to our kbucket.
     fn add_enr(&self, enr: Enr) -> Result<(), OverlayRequestError>;
@@ -129,7 +95,7 @@ pub trait Network {
 
     /// Performs a content lookup for `target`.
     /// Returns the target content along with the peers traversed during content lookup.
-    async fn lookup_content(
+    async fn lookup_content<TContentKey>(
         &self,
         target: TContentKey,
         is_trace: bool,
@@ -140,8 +106,4 @@ pub trait Network {
     fn get_summary_info(&self) -> String;
 
     fn overlay(&self) -> Self::Result;
-
-    fn store(&self) -> {
-
-    }
 }

@@ -76,116 +76,116 @@ use ethportal_api::types::portal::TraceContentInfo;
 //     let _ = request.resp.send(response);
 // }
 
-/// Constructs a JSON call for the RecursiveFindContent method.
-pub async fn recursive_find_content<Network: crate::network::Network, ContentKey: std::fmt::Display + std::clone::Clone + ethportal_api::OverlayContentKey>(
-    network: Arc<RwLock<Network>>,
-    content_key: ContentKey,
-    is_trace: bool,
-) -> Result<Value, String> {
-    // Check whether we have the data locally.
-    let overlay = network.read().await.overlay();
-    let local_content: Option<Vec<u8>> = match network.read().await.store.read().get(&content_key) {
-        Ok(Some(data)) => Some(data),
-        Ok(None) => None,
-        Err(err) => {
-            error!(
-                error = %err,
-                content.key = %content_key,
-                "Error checking data store for content",
-            );
-            None
-        }
-    };
-    let (possible_content_bytes, trace) = match local_content {
-        Some(val) => {
-            let local_enr = overlay.local_enr();
-            let mut trace = QueryTrace::new(
-                &overlay.local_enr(),
-                NodeId::new(&content_key.content_id()).into(),
-            );
-            trace.node_responded_with_content(&local_enr);
-            (Some(val), if is_trace { Some(trace) } else { None })
-        }
-        None => overlay.lookup_content(content_key.clone(), is_trace).await,
-    };
+// /// Constructs a JSON call for the RecursiveFindContent method.
+// pub async fn recursive_find_content<Network: crate::network::Network, ContentKey: std::fmt::Display + std::clone::Clone + ethportal_api::OverlayContentKey>(
+//     network: Arc<RwLock<Network>>,
+//     content_key: ContentKey,
+//     is_trace: bool,
+// ) -> Result<Value, String> {
+//     // Check whether we have the data locally.
+//     let overlay = network.read().await.overlay();
+//     let local_content: Option<Vec<u8>> = match network.read().await.store.read().get(&content_key) {
+//         Ok(Some(data)) => Some(data),
+//         Ok(None) => None,
+//         Err(err) => {
+//             error!(
+//                 error = %err,
+//                 content.key = %content_key,
+//                 "Error checking data store for content",
+//             );
+//             None
+//         }
+//     };
+//     let (possible_content_bytes, trace) = match local_content {
+//         Some(val) => {
+//             let local_enr = overlay.local_enr();
+//             let mut trace = QueryTrace::new(
+//                 &overlay.local_enr(),
+//                 NodeId::new(&content_key.content_id()).into(),
+//             );
+//             trace.node_responded_with_content(&local_enr);
+//             (Some(val), if is_trace { Some(trace) } else { None })
+//         }
+//         None => overlay.lookup_content(content_key.clone(), is_trace).await,
+//     };
+//
+//     // Format as string.
+//     let content_response_string = match possible_content_bytes {
+//         Some(bytes) => Value::String(hex_encode(bytes)),
+//         None => Value::String(CONTENT_ABSENT.to_string()), // "0x"
+//     };
+//
+//     // If tracing is not required, return content.
+//     if !is_trace {
+//         return Ok(content_response_string);
+//     }
+//     if let Some(trace) = trace {
+//         Ok(json!(TraceContentInfo {
+//             content: serde_json::from_value(content_response_string).map_err(|e| e.to_string())?,
+//             trace,
+//         }))
+//     } else {
+//         Err("Content query trace requested but none provided.".to_owned())
+//     }
+// }
 
-    // Format as string.
-    let content_response_string = match possible_content_bytes {
-        Some(bytes) => Value::String(hex_encode(bytes)),
-        None => Value::String(CONTENT_ABSENT.to_string()), // "0x"
-    };
+// /// Constructs a JSON call for the LocalContent method.
+// async fn local_content<Network: crate::network::Network, ContentKey: std::fmt::Debug>(
+//     network: Arc<RwLock<Network>>,
+//     content_key: ContentKey,
+// ) -> Result<Value, String> {
+//     let store = network.read().await.overlay().store.clone();
+//     let response = match store.read().get(&content_key)
+//         {
+//             Ok(val) => match val {
+//                 Some(val) => {
+//                     Ok(Value::String(hex_encode(val)))
+//                 }
+//                 None => {
+//                     Ok(Value::String(CONTENT_ABSENT.to_string()))
+//                 }
+//             },
+//             Err(err) => Err(format!(
+//                 "Database error while looking for content key in local storage: {content_key:?}, with error: {err}",
+//             )),
+//         };
+//     response
+// }
 
-    // If tracing is not required, return content.
-    if !is_trace {
-        return Ok(content_response_string);
-    }
-    if let Some(trace) = trace {
-        Ok(json!(TraceContentInfo {
-            content: serde_json::from_value(content_response_string).map_err(|e| e.to_string())?,
-            trace,
-        }))
-    } else {
-        Err("Content query trace requested but none provided.".to_owned())
-    }
-}
+// /// Constructs a JSON call for the PaginateLocalContentKeys method.
+// pub async fn paginate_local_content_keys<Network: crate::network::Network>(
+//     network: Arc<RwLock<Network>>,
+//     offset: u64,
+//     limit: u64,
+// ) -> Result<Value, String> {
+//     let store = network.read().await.overlay().store.clone();
+//     let response = match store.read().paginate(&offset, &limit)
+//         {
+//             Ok(val) => Ok(json!(val)),
+//             Err(err) => Err(format!(
+//                 "Database error while paginating local content keys with offset: {offset:?}, limit: {limit:?}. Error message: {err}"
+//             )),
+//         };
+//     response
+// }
 
-/// Constructs a JSON call for the LocalContent method.
-async fn local_content<Network: crate::network::Network, ContentKey: std::fmt::Debug>(
-    network: Arc<RwLock<Network>>,
-    content_key: ContentKey,
-) -> Result<Value, String> {
-    let store = network.read().await.overlay().store.clone();
-    let response = match store.read().get(&content_key)
-        {
-            Ok(val) => match val {
-                Some(val) => {
-                    Ok(Value::String(hex_encode(val)))
-                }
-                None => {
-                    Ok(Value::String(CONTENT_ABSENT.to_string()))
-                }
-            },
-            Err(err) => Err(format!(
-                "Database error while looking for content key in local storage: {content_key:?}, with error: {err}",
-            )),
-        };
-    response
-}
-
-/// Constructs a JSON call for the PaginateLocalContentKeys method.
-pub async fn paginate_local_content_keys<Network: crate::network::Network>(
-    network: Arc<RwLock<Network>>,
-    offset: u64,
-    limit: u64,
-) -> Result<Value, String> {
-    let store = network.read().await.overlay().store.clone();
-    let response = match store.read().paginate(&offset, &limit)
-        {
-            Ok(val) => Ok(json!(val)),
-            Err(err) => Err(format!(
-                "Database error while paginating local content keys with offset: {offset:?}, limit: {limit:?}. Error message: {err}"
-            )),
-        };
-    response
-}
-
-/// Constructs a JSON call for the Store method.
-pub async fn store<Network: crate::network::Network, ContentKey, ContentValue: ethportal_api::ContentValue>(
-    network: Arc<RwLock<Network>>,
-    content_key: ContentKey,
-    content_value: ContentValue,
-) -> Result<Value, String> {
-    let data = content_value.encode();
-    let store = network.read().await.overlay().store.clone();
-    let response = match store
-        .write()
-        .put::<ContentKey, Vec<u8>>(content_key, data)
-    {
-        Ok(_) => Ok(Value::Bool(true)),
-        Err(err) => Ok(Value::String(err.to_string())),
-    };
-    response
-}
+// /// Constructs a JSON call for the Store method.
+// pub async fn store<Network: crate::network::Network, ContentKey, ContentValue: ethportal_api::ContentValue>(
+//     network: Arc<RwLock<Network>>,
+//     content_key: ContentKey,
+//     content_value: ContentValue,
+// ) -> Result<Value, String> {
+//     let data = content_value.encode();
+//     let store = network.read().await.overlay().store.clone();
+//     let response = match store
+//         .write()
+//         .put::<ContentKey, Vec<u8>>(content_key, data)
+//     {
+//         Ok(_) => Ok(Value::Bool(true)),
+//         Err(err) => Ok(Value::String(err.to_string())),
+//     };
+//     response
+// }
 
 /// Constructs a JSON call for the AddEnr method.
 pub async fn add_enr<Network: crate::network::Network>(
@@ -237,7 +237,7 @@ pub async fn find_content<Network: crate::network::Network, ContentKey>(
     network: Arc<RwLock<Network>>,
     enr: discv5::enr::Enr<discv5::enr::CombinedKey>,
     content_key: ContentKey,
-) -> Result<Value, String> {
+) -> Result<Value, String> where Vec<u8>: std::convert::From<ContentKey> {
     match network.read().await.send_find_content(enr, content_key.into()).await {
         Ok(content) => match content.try_into() {
             Ok(val) => Ok(val),

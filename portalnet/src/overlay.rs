@@ -79,7 +79,7 @@ impl Default for OverlayConfig {
     }
 }
 
-type BucketEntry = (NodeId, Enr, NodeStatus, Distance, Option<String>);
+pub(crate) type BucketEntry = (NodeId, Enr, NodeStatus, Distance, Option<String>);
 
 /// Overlay protocol is a layer on top of discv5 that handles all requests from the overlay networks
 /// (state, history etc.) and dispatch them to the discv5 protocol TalkReq. Each network should

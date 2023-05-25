@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use discv5::{Enr, TalkRequest};
 use discv5::enr::NodeId;
+use discv5::kbucket::NodeStatus;
 
 use parking_lot::RwLock as PLRwLock;
 use tokio::sync::RwLock;
 use utp_rs::socket::UtpSocket;
+use ethportal_api::OverlayContentKey;
 
 use crate::validation::BeaconValidator;
 use ethportal_api::types::content_key::{BeaconContentKey, RawContentKey};
@@ -21,6 +23,9 @@ use portalnet::network::Network;
 use portalnet::types::messages::{Accept, Content, Nodes, Pong, Request, Response};
 use trin_validation::oracle::HeaderOracle;
 
+pub(crate) type BucketEntry = (NodeId, Enr, NodeStatus, Distance, Option<String>);
+
+#[async_trait::async_trait]
 impl Network for BeaconNetwork {
     type Result = Arc<OverlayProtocol<BeaconContentKey, XorMetric, BeaconValidator, PortalStorage>>;
 
@@ -36,11 +41,11 @@ impl Network for BeaconNetwork {
         self.overlay.data_radius()
     }
 
-    async fn process_one_request(&self, talk_request: &TalkRequest) -> Result<Response, crate::overlay_service::OverlayRequestError> {
+    async fn process_one_request(&self, talk_request: &TalkRequest) -> Result<Response, portalnet::overlay_service::OverlayRequestError> {
         self.overlay.process_one_request(talk_request).await
     }
 
-    fn propagate_gossip(&self, content: Vec<(TContentKey, Vec<u8>)>) -> usize {
+    fn propagate_gossip<T as BeaconContentKey>(&self, content: Vec<(T as BeaconContentKey, Vec<u8>)>) -> usize {
         self.overlay.propagate_gossip(content)
     }
 
@@ -56,11 +61,11 @@ impl Network for BeaconNetwork {
         self.overlay.bucket_entries()
     }
 
-    fn add_enr(&self, enr: ethportal_api::Enr) -> Result<(), crate::overlay_service::OverlayRequestError> {
+    fn add_enr(&self, enr: ethportal_api::Enr) -> Result<(), portalnet::overlay_service::OverlayRequestError> {
         self.overlay.add_enr(enr)
     }
 
-    fn get_enr(&self, node_id: NodeId) -> Result<ethportal_api::Enr, crate::overlay_service::OverlayRequestError> {
+    fn get_enr(&self, node_id: NodeId) -> Result<ethportal_api::Enr, portalnet::overlay_service::OverlayRequestError> {
         self.overlay.get_enr(node_id)
     }
 
@@ -68,35 +73,35 @@ impl Network for BeaconNetwork {
         self.overlay.delete_enr(node_id)
     }
 
-    async fn lookup_enr(&self, node_id: NodeId) -> Result<ethportal_api::Enr, crate::overlay_service::OverlayRequestError> {
+    async fn lookup_enr(&self, node_id: NodeId) -> Result<ethportal_api::Enr, portalnet::overlay_service::OverlayRequestError> {
         self.overlay.lookup_enr(node_id).await
     }
 
-    async fn send_ping(&self, enr: ethportal_api::Enr) -> Result<Pong, crate::overlay_service::OverlayRequestError> {
+    async fn send_ping(&self, enr: ethportal_api::Enr) -> Result<Pong, portalnet::overlay_service::OverlayRequestError> {
         self.overlay.send_ping(enr).await
     }
 
-    async fn send_find_nodes(&self, enr: ethportal_api::Enr, distances: Vec<u16>) -> Result<Nodes, crate::overlay_service::OverlayRequestError> {
+    async fn send_find_nodes(&self, enr: ethportal_api::Enr, distances: Vec<u16>) -> Result<Nodes, portalnet::overlay_service::OverlayRequestError> {
         self.overlay.send_find_nodes(enr, distances).await
     }
 
-    async fn send_find_content(&self, enr: ethportal_api::Enr, content_key: Vec<u8>) -> Result<Content, crate::overlay_service::OverlayRequestError> {
+    async fn send_find_content(&self, enr: ethportal_api::Enr, content_key: Vec<u8>) -> Result<Content, portalnet::overlay_service::OverlayRequestError> {
         self.overlay.send_find_content(enr, content_key).await
     }
 
-    async fn send_offer(&self, content_keys: Vec<RawContentKey>, enr: ethportal_api::Enr) -> Result<Accept, crate::overlay_service::OverlayRequestError> {
-        self.overlay.send_offer(content_keys, enr)
+    async fn send_offer(&self, content_keys: Vec<RawContentKey>, enr: ethportal_api::Enr) -> Result<Accept, portalnet::overlay_service::OverlayRequestError> {
+        self.overlay.send_offer(content_keys, enr).await
     }
 
-    async fn send_populated_offer(&self, enr: ethportal_api::Enr, content_key: RawContentKey, content_value: Vec<u8>) -> Result<Accept, crate::overlay_service::OverlayRequestError> {
-        self.overlay.send_populated_offer(enr, content_key, content_value)
+    async fn send_populated_offer(&self, enr: ethportal_api::Enr, content_key: RawContentKey, content_value: Vec<u8>) -> Result<Accept, portalnet::overlay_service::OverlayRequestError> {
+        self.overlay.send_populated_offer(enr, content_key, content_value).await
     }
 
     async fn lookup_node(&self, target: NodeId) -> Vec<Enr> {
-        self.overlay.lookup_node(target)
+        self.overlay.lookup_node(target).await
     }
 
-    async fn lookup_content(&self, target: TContentKey, is_trace: bool) -> (Option<Vec<u8>>, Option<QueryTrace>) {
+    async fn lookup_content<TContentKey>(&self, target: TContentKey, is_trace: bool) -> (Option<Vec<u8>>, Option<QueryTrace>) {
         self.overlay.lookup_content(target, is_trace).await
     }
 
