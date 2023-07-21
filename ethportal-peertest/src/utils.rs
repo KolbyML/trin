@@ -1,7 +1,9 @@
 use tracing::error;
 
-use ethportal_api::PossibleHistoryContentValue;
-use ethportal_api::{HistoryContentKey, HistoryNetworkApiClient};
+use ethportal_api::{
+    HistoryContentKey, HistoryContentValue, HistoryNetworkApiClient, PossibleHistoryContentValue,
+};
+use serde::Deserialize;
 
 /// Wait for the content to be transferred
 pub async fn wait_for_content<P: HistoryNetworkApiClient + std::marker::Sync>(
@@ -28,4 +30,56 @@ pub async fn wait_for_content<P: HistoryNetworkApiClient + std::marker::Sync>(
     }
 
     received_content_value.unwrap()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TypeData {
+    pub key: HistoryContentKey,
+    pub value: HistoryContentValue,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BlockData {
+    pub header_with_proof: TypeData,
+    pub block_body: TypeData,
+    pub receipts: TypeData,
+}
+
+#[derive(Debug)]
+pub struct TestData {
+    pub header_with_proof: (HistoryContentKey, HistoryContentValue),
+    pub block_body: (HistoryContentKey, HistoryContentValue),
+    pub receipts: (HistoryContentKey, HistoryContentValue),
+}
+
+pub struct AllTestData {
+    pub small: Vec<TestData>,
+    pub large: Vec<TestData>,
+}
+
+pub fn generate_test_content() -> AllTestData {
+    let raw = std::fs::read_to_string("./test_assets/mainnet/1_10.json").unwrap();
+    let result: Vec<BlockData> = serde_json::from_str(&raw).unwrap();
+    let large_raw = std::fs::read_to_string("./test_assets/mainnet/large.json").unwrap();
+    let large_result: Vec<BlockData> = serde_json::from_str(&large_raw).unwrap();
+    let small_result: Vec<TestData> = result
+        .into_iter()
+        .map(|val| TestData {
+            header_with_proof: (val.header_with_proof.key, val.header_with_proof.value),
+            block_body: (val.block_body.key, val.block_body.value),
+            receipts: (val.receipts.key, val.receipts.value),
+        })
+        .collect();
+    let large_result: Vec<TestData> = large_result
+        .into_iter()
+        .map(|val| TestData {
+            header_with_proof: (val.header_with_proof.key, val.header_with_proof.value),
+            block_body: (val.block_body.key, val.block_body.value),
+            receipts: (val.receipts.key, val.receipts.value),
+        })
+        .collect();
+    AllTestData {
+        small: small_result,
+        large: large_result,
+    }
 }
