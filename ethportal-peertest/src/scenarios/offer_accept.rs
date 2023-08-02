@@ -2,20 +2,16 @@ use std::str::FromStr;
 
 use tracing::info;
 
-use crate::{utils::wait_for_content, Peertest};
+use crate::{constants::test_item, utils::wait_for_content, Peertest};
 use ethportal_api::{
-    jsonrpsee::async_client::Client, types::enr::Enr, utils::bytes::hex_encode, HistoryContentKey,
-    HistoryContentValue, HistoryNetworkApiClient, PossibleHistoryContentValue,
+    jsonrpsee::async_client::Client, types::enr::Enr, utils::bytes::hex_encode,
+    HistoryNetworkApiClient, PossibleHistoryContentValue,
 };
 
-pub async fn test_unpopulated_offer(
-    peertest: &Peertest,
-    target: &Client,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_unpopulated_offer(peertest: &Peertest, target: &Client) {
     info!("Testing Unpopulated OFFER/ACCEPT flow");
 
-    let (content_key, content_value) = test_item;
+    let (content_key, content_value) = test_item();
     // Store content to offer in the testnode db
     let store_result = target
         .store(content_key.clone(), content_value.clone())
@@ -49,14 +45,10 @@ pub async fn test_unpopulated_offer(
     );
 }
 
-pub async fn test_populated_offer(
-    peertest: &Peertest,
-    target: &Client,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_populated_offer(peertest: &Peertest, target: &Client) {
     info!("Testing Populated Offer/ACCEPT flow");
 
-    let (content_key, content_value) = test_item;
+    let (content_key, content_value) = test_item();
     let result = target
         .offer(
             Enr::from_str(&peertest.bootnode.enr.to_base64()).unwrap(),

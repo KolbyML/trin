@@ -454,8 +454,8 @@ where
                         {
                             Ok(_) => Ok((Content::Content(content), false)),
                             Err(msg) => Err(OverlayRequestError::FailedValidation(format!(
-                                "Network: {:?}, Reason: {:?}",
-                                self.protocol, msg
+                                "Network: {:?}, Reason: {msg:?}",
+                                self.protocol
                             ))),
                         }
                     }

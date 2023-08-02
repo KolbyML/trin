@@ -1,25 +1,23 @@
+use crate::{
+    constants::{test_block_body, test_header_with_proof, test_receipts},
+    Peertest,
+};
 use ethereum_types::H256;
 use ethportal_api::types::content_key::history::BlockHeaderKey;
 use ethportal_api::types::enr::Enr;
 use ethportal_api::types::portal::ContentInfo;
 use ethportal_api::{
-    jsonrpsee::async_client::Client, HistoryContentKey, HistoryContentValue,
-    HistoryNetworkApiClient, PossibleHistoryContentValue,
+    jsonrpsee::async_client::Client, HistoryContentKey, HistoryNetworkApiClient,
+    PossibleHistoryContentValue,
 };
 use std::str::FromStr;
 use tracing::info;
 
-use crate::Peertest;
-
-pub async fn test_validate_pre_merge_header_with_proof(
-    peertest: &Peertest,
-    target: &Client,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_validate_pre_merge_header_with_proof(peertest: &Peertest, target: &Client) {
     info!("Test validating a pre-merge header-with-proof");
 
     // store header_with_proof
-    let (content_key, content_value) = test_item;
+    let (content_key, content_value) = test_header_with_proof();
 
     let store_result = peertest
         .bootnode
@@ -46,7 +44,7 @@ pub async fn test_validate_pre_merge_header_with_proof(
         } => {
             assert_eq!(
                 content,
-                PossibleHistoryContentValue::ContentPresent(header_with_proof_content_value)
+                PossibleHistoryContentValue::ContentPresent(content_value)
             );
             assert!(!utp_transfer);
         }
@@ -54,15 +52,11 @@ pub async fn test_validate_pre_merge_header_with_proof(
     }
 }
 
-pub async fn test_invalidate_header_by_hash(
-    peertest: &Peertest,
-    target: &Client,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_invalidate_header_by_hash(peertest: &Peertest, target: &Client) {
     info!("Test invalidating a pre-merge header-with-proof by header hash");
 
     // store header_with_proof - doesn't perform validation
-    let (_, content_value) = test_item;
+    let (_, content_value) = test_header_with_proof();
     let invalid_content_key = HistoryContentKey::BlockHeaderWithProof(BlockHeaderKey {
         block_hash: H256::random().into(),
     });
@@ -89,20 +83,15 @@ pub async fn test_invalidate_header_by_hash(
     }
 }
 
-pub async fn test_validate_pre_merge_block_body(
-    peertest: &Peertest,
-    target: &Client,
-    header_content: (HistoryContentKey, HistoryContentValue),
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_validate_pre_merge_block_body(peertest: &Peertest, target: &Client) {
     info!("Test validating a pre-merge block body");
     // store header_with_proof to validate block body
-    let (content_key, content_value) = header_content;
+    let (content_key, content_value) = test_header_with_proof();
     let store_result = target.store(content_key, content_value).await.unwrap();
     assert!(store_result);
 
     // store block body
-    let (content_key, content_value) = test_item;
+    let (content_key, content_value) = test_block_body();
 
     let store_result = peertest
         .bootnode
@@ -129,7 +118,7 @@ pub async fn test_validate_pre_merge_block_body(
         } => {
             assert_eq!(
                 content,
-                PossibleHistoryContentValue::ContentPresent(block_body_content_value)
+                PossibleHistoryContentValue::ContentPresent(content_value)
             );
             assert!(utp_transfer);
         }
@@ -137,20 +126,15 @@ pub async fn test_validate_pre_merge_block_body(
     }
 }
 
-pub async fn test_validate_pre_merge_receipts(
-    peertest: &Peertest,
-    target: &Client,
-    header_content: (HistoryContentKey, HistoryContentValue),
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_validate_pre_merge_receipts(peertest: &Peertest, target: &Client) {
     info!("Test validating pre-merge receipts");
     // store header_with_proof to validate block body
-    let (content_key, content_value) = header_content;
+    let (content_key, content_value) = test_header_with_proof();
     let store_result = target.store(content_key, content_value).await.unwrap();
     assert!(store_result);
 
     // store receipts
-    let (content_key, content_value) = test_item;
+    let (content_key, content_value) = test_receipts();
 
     let store_result = peertest
         .bootnode
@@ -177,7 +161,7 @@ pub async fn test_validate_pre_merge_receipts(
         } => {
             assert_eq!(
                 content,
-                PossibleHistoryContentValue::ContentPresent(receipts_content_value)
+                PossibleHistoryContentValue::ContentPresent(content_value)
             );
             assert!(utp_transfer);
         }

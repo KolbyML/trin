@@ -1,13 +1,9 @@
-use ethportal_api::HistoryContentValue;
 use ethportal_api::HistoryNetworkApiClient;
 use ethportal_api::{BlockHeaderKey, HistoryContentKey};
 
-use crate::Peertest;
+use crate::{constants::test_item, Peertest};
 
-pub async fn test_paginate_local_storage(
-    peertest: &Peertest,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_paginate_local_storage(peertest: &Peertest) {
     let ipc_client = &peertest.bootnode.ipc_client;
     // Test paginate with empty storage
     let result = ipc_client.paginate_local_content_keys(0, 1).await.unwrap();
@@ -22,7 +18,7 @@ pub async fn test_paginate_local_storage(
             .unwrap()
         })
         .collect();
-    let (_, content_value) = test_item;
+    let (_, content_value) = test_item();
     for content_key in content_keys.clone().into_iter() {
         // Store content to offer in the testnode db
         let store_result = ipc_client

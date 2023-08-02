@@ -1,22 +1,16 @@
+use crate::constants::test_item;
 use crate::Peertest;
 use discv5::enr::NodeId;
 use ethportal_api::types::portal::{ContentInfo, TraceContentInfo};
 use ethportal_api::utils::bytes::hex_decode;
-use ethportal_api::{
-    HistoryContentKey, HistoryContentValue, HistoryNetworkApiClient, PossibleHistoryContentValue,
-};
+use ethportal_api::{HistoryNetworkApiClient, PossibleHistoryContentValue};
 use jsonrpsee::async_client::Client;
 use tracing::info;
 
-pub async fn test_find_content_return_enr(
-    target: &Client,
-    peertest: &Peertest,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_find_content_return_enr(target: &Client, peertest: &Peertest) {
     info!("Testing find content returns enrs properly");
 
-    // header with proof
-    let content_key = test_item.0.clone();
+    let (content_key, _) = test_item();
 
     // check if we can fetch data from routing table
     match HistoryNetworkApiClient::get_enr(
@@ -50,7 +44,7 @@ pub async fn test_find_content_return_enr(
 }
 
 pub async fn test_recursive_find_nodes_self(peertest: &Peertest) {
-    info!("Testing trace recursive find nodes self");
+    info!("Testing recursive find nodes self");
     let target_enr = peertest.bootnode.enr.clone();
     let target_node_id = NodeId::from(target_enr.node_id().raw());
     let result = peertest
@@ -63,7 +57,7 @@ pub async fn test_recursive_find_nodes_self(peertest: &Peertest) {
 }
 
 pub async fn test_recursive_find_nodes_peer(peertest: &Peertest) {
-    info!("Testing trace recursive find nodes peer");
+    info!("Testing recursive find nodes peer");
     let target_enr = peertest.nodes[0].enr.clone();
     let target_node_id = NodeId::from(target_enr.node_id().raw());
     let result = peertest
@@ -76,7 +70,7 @@ pub async fn test_recursive_find_nodes_peer(peertest: &Peertest) {
 }
 
 pub async fn test_recursive_find_nodes_random(peertest: &Peertest) {
-    info!("Testing trace recursive find nodes random");
+    info!("Testing recursive find nodes random");
     let mut bytes = [0u8; 32];
     let random_node_id =
         hex_decode("0xcac75e7e776d84fba55a3104bdccfd716537bca3ad8465113f67f04d62694183").unwrap();
@@ -91,61 +85,9 @@ pub async fn test_recursive_find_nodes_random(peertest: &Peertest) {
     assert_eq!(result.len(), 3);
 }
 
-pub async fn test_recursive_utp(
-    peertest: &Peertest,
-    header_content: (HistoryContentKey, HistoryContentValue),
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
-    info!("Test recursive utp");
-
-    // store header_with_proof to validate block body
-    let (content_key, content_value) = header_content;
-
-    let store_result = peertest.nodes[0]
-        .ipc_client
-        .store(content_key.clone(), content_value.clone())
-        .await
-        .unwrap();
-
-    assert!(store_result);
-
-    let (content_key, content_value) = test_item;
-
-    let store_result = peertest
-        .bootnode
-        .ipc_client
-        .store(content_key.clone(), content_value.clone())
-        .await
-        .unwrap();
-
-    assert!(store_result);
-
-    let content_info = peertest.nodes[0]
-        .ipc_client
-        .recursive_find_content(content_key)
-        .await
-        .unwrap();
-
-    if let ContentInfo::Content {
-        content,
-        utp_transfer,
-    } = content_info
-    {
-        assert_eq!(
-            content,
-            PossibleHistoryContentValue::ContentPresent(history_content_value)
-        );
-        assert!(utp_transfer);
-    } else {
-        panic!("Error: Unexpected content info response");
-    }
-}
-
-pub async fn test_trace_recursive_find_content(
-    peertest: &Peertest,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
-    let (content_key, content_value) = test_item;
+pub async fn test_trace_recursive_find_content(peertest: &Peertest) {
+    info!("Testing trace recursive find content");
+    let (content_key, content_value) = test_item();
     let store_result = peertest
         .bootnode
         .ipc_client
@@ -194,12 +136,9 @@ pub async fn test_trace_recursive_find_content(
 }
 
 // This test ensures that when content is not found the correct response is returned.
-pub async fn test_trace_recursive_find_content_for_absent_content(
-    peertest: &Peertest,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
+pub async fn test_trace_recursive_find_content_for_absent_content(peertest: &Peertest) {
     let client = &peertest.nodes[0].ipc_client;
-    let (content_key, _) = test_item;
+    let (content_key, _) = test_item();
 
     let result = client
         .trace_recursive_find_content(content_key)
@@ -212,11 +151,8 @@ pub async fn test_trace_recursive_find_content_for_absent_content(
     assert!(result.trace.responses.len() > 1);
 }
 
-pub async fn test_trace_recursive_find_content_local_db(
-    peertest: &Peertest,
-    test_item: (HistoryContentKey, HistoryContentValue),
-) {
-    let (content_key, content_value) = test_item;
+pub async fn test_trace_recursive_find_content_local_db(peertest: &Peertest) {
+    let (content_key, content_value) = test_item();
 
     let store_result = peertest
         .bootnode
