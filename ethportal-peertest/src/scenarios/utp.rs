@@ -1,3 +1,5 @@
+use std::str::FromStr;
+use discv5::Enr;
 use crate::{
     constants::{test_block_body, test_header_with_proof},
     Peertest,
@@ -6,20 +8,22 @@ use discv5::enr::NodeId;
 use ethportal_api::types::portal::{ContentInfo, TraceContentInfo};
 use ethportal_api::{HistoryNetworkApiClient, PossibleHistoryContentValue};
 use tracing::info;
+use crate::constants::test_receipts;
 
 pub async fn test_recursive_utp(peertest: &Peertest) {
     info!("Test recursive utp");
 
     // store header_with_proof to validate block body
     let (content_key, content_value) = test_header_with_proof();
-    let store_result = peertest.nodes[0]
+    let store_result = peertest
+        .bootnode
         .ipc_client
         .store(content_key.clone(), content_value.clone())
         .await
         .unwrap();
     assert!(store_result);
 
-    let (content_key, content_value) = test_block_body();
+    let (content_key, content_value) = test_receipts();
 
     let store_result = peertest
         .bootnode
@@ -32,7 +36,7 @@ pub async fn test_recursive_utp(peertest: &Peertest) {
 
     let content_info = peertest.nodes[0]
         .ipc_client
-        .recursive_find_content(content_key)
+        .find_content(Enr::from_str(&peertest.bootnode.enr.to_base64()).unwrap(), content_key)
         .await
         .unwrap();
 

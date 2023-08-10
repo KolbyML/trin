@@ -142,6 +142,7 @@ mod test {
     #[tokio::test(flavor = "multi_thread")]
     #[serial]
     async fn test_recursive_utp() {
+        init_tracing_logger();
         let (peertest, _target, handle) = setup_peertest().await;
         peertest::scenarios::utp::test_recursive_utp(&peertest).await;
         peertest.exit_all_nodes();
