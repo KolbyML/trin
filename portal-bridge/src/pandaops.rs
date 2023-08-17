@@ -1,7 +1,6 @@
 use crate::bridge::Retry;
 use crate::constants::{BASE_CL_ENDPOINT, BASE_EL_ENDPOINT};
 use crate::full_header::{FullHeader, FullHeaderBatch};
-use crate::{PANDAOPS_CLIENT_ID, PANDAOPS_CLIENT_SECRET};
 use anyhow::{anyhow, bail};
 use ethereum_types::H256;
 use ethportal_api::types::jsonrpc::params::Params;
@@ -9,6 +8,7 @@ use ethportal_api::types::jsonrpc::request::JsonRequest;
 use ethportal_api::utils::bytes::hex_encode;
 use ethportal_api::{Header, Receipts};
 use serde_json::{json, Value};
+use tracing::debug;
 
 pub struct PandaOpsMiddleware {
     pub base_el_endpoint: String,
@@ -38,8 +38,8 @@ impl Default for PandaOpsMiddleware {
         Self {
             base_el_endpoint: BASE_EL_ENDPOINT.to_string(),
             base_cl_endpoint: BASE_CL_ENDPOINT.to_string(),
-            client_id: PANDAOPS_CLIENT_ID.clone(),
-            client_secret: PANDAOPS_CLIENT_SECRET.clone(),
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
         }
     }
 }
@@ -54,8 +54,6 @@ impl PandaOpsMiddleware {
             .body_json(&json!(obj))
             .map_err(|e| anyhow!("Unable to construct json post request: {e:?}"))?
             .header("Content-Type", "application/json".to_string())
-            .header("CF-Access-Client-Id", self.client_id.clone())
-            .header("CF-Access-Client-Secret", self.client_secret.clone())
             .recv_string()
             .await;
 
@@ -77,6 +75,7 @@ impl PandaOpsMiddleware {
         &self,
         tx_hashes: &[H256],
     ) -> anyhow::Result<Receipts> {
+        debug!("Serving receipt: cat 1");
         let request: Vec<JsonRequest> = tx_hashes
             .iter()
             .enumerate()
@@ -87,7 +86,9 @@ impl PandaOpsMiddleware {
                 JsonRequest::new(method, params, id as u32)
             })
             .collect();
+        debug!("Serving receipt: cat 2");
         let response = self.batch_request(request).await?;
+        debug!("Serving receipt: cat 3 {}", response);
         Ok(serde_json::from_str(&response)?)
     }
 

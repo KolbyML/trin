@@ -8,7 +8,7 @@ pub const BATCH_SIZE: u64 = 128;
 // If you don't have access to the PANDAOPS nodes, but still want to use the bridge feature, let us
 // know on Discord or Github and we'll prioritize support for any provider.
 /// Execution layer PandaOps endpoint
-pub const BASE_EL_ENDPOINT: &str = "https://archive.mainnet.eu1.ethpandaops.io";
+pub const BASE_EL_ENDPOINT: &str = "https://mainnet.infura.io/v3/<infura key>";
 /// Consensus layer PandaOps endpoint
 pub const BASE_CL_ENDPOINT: &str = "https://beacon.mainnet.ethpandaops.io";
 

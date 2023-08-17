@@ -149,7 +149,7 @@ impl Bridge {
                     Ok(val) => Some(val),
                     Err(msg) => {
                         warn!("Unable to find epoch acc for block height: {height}. Skipping iteration: {msg:?}");
-                        continue;
+                        None
                     }
                 }
             } else {
@@ -166,34 +166,50 @@ impl Bridge {
                 full_header.epoch_acc = epoch_acc;
             }
 
-            let (content_key, content_value) = Bridge::construct_header(&full_header)
-                .await
-                .expect("Error constructing header");
-            assets.push(Asset {
-                content_key,
-                content_value,
-                comment: format!("Block number: {height}").to_string(),
-            });
+            match Bridge::construct_header(&full_header)
+                .await {
+                Ok((content_key, content_value)) => {
+                    let asset = Asset {
+                        content_key,
+                        content_value,
+                        comment: format!("Block number: {height}").to_string(),
+                    };
+                    assets.push(asset);
+                }
+                Err(_) => {
+                }
+            }
 
-            let (content_key, content_value) = self
+            match self
                 .construct_block_body(&full_header)
-                .await
-                .expect("Error constructing block body");
-            assets.push(Asset {
-                content_key,
-                content_value,
-                comment: "".to_string(),
-            });
+                .await {
+                Ok((content_key, content_value)) => {
+                    let asset = Asset {
+                        content_key,
+                        content_value,
+                        comment: "".to_string(),
+                    };
+                    assets.push(asset);
+                }
+                Err(_) => {
+                }
+            }
 
-            let (content_key, content_value) = self
+            match self
                 .construct_receipt(&full_header)
-                .await
-                .expect("Error constructing receipt");
-            assets.push(Asset {
-                content_key,
-                content_value,
-                comment: "".to_string(),
-            });
+                .await {
+                Ok((content_key, content_value)) => {
+                    let asset = Asset {
+                        content_key,
+                        content_value,
+                        comment: "".to_string(),
+                    };
+
+                    assets.push(asset);
+                }
+                Err(_) => {
+                }
+            }
         }
 
         let extension = test_path
@@ -216,10 +232,10 @@ impl Bridge {
 
                 // Write a header listing the block range and what content types are included.
                 file.write_all(
-                    format!(
-                    "# Test data for Portal Bridge\n
-                    # Block range is {start_block}-{end_block}\n
-                    # Data is formatted by comment of block height, header, block body, and receipt\n\n")
+                    format!("{}{}{}",
+                            "# Test data for Portal Bridge\n",
+                            format!("# Block range is {start_block}-{end_block}\n"),
+                            "# Data is formatted by comment of block height, header, block body, and receipt\n\n")
                     .as_bytes())
                     .expect("Failed to write test file header");
 
@@ -476,6 +492,7 @@ impl Bridge {
         full_header: &FullHeader,
     ) -> anyhow::Result<(HistoryContentKey, HistoryContentValue)> {
         debug!("Serving receipt: {:?}", full_header.header.number);
+        debug!("Serving receipt: bob 0");
         let receipts = match full_header.txs.len() {
             0 => Receipts {
                 receipt_list: vec![],
@@ -486,19 +503,23 @@ impl Bridge {
                     .await?
             }
         };
-
+        debug!("Serving receipt: bob 1");
         // Validate Receipts
         let receipts_root = receipts.root()?;
+        debug!("Serving receipt: bob 2");
         if receipts_root != full_header.header.receipts_root {
-            bail!(
+            panic!(
                 "Receipts root doesn't match header receipts root: {receipts_root:?} - {:?}",
                 full_header.header.receipts_root
             );
         }
+        debug!("Serving receipt: bob 3");
         let content_key = HistoryContentKey::BlockReceipts(BlockReceiptsKey {
             block_hash: full_header.header.hash().to_fixed_bytes(),
         });
+        debug!("Serving receipt: bob 4");
         let content_value = HistoryContentValue::Receipts(receipts);
+        debug!("Serving receipt: bob 5");
         Ok((content_key, content_value))
     }
 

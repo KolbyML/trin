@@ -42,6 +42,18 @@ impl FromStr for BridgeMode {
                         let mode_type = ModeType::from_str(&val[1..])?;
                         Ok(BridgeMode::Single(mode_type))
                     }
+                    "generatetestdata" => {
+                        let val = val[1..].to_owned();
+                        let index = val
+                            .find('/')
+                            .ok_or("Invalid bridge mode arg: missing '/'")?;
+                        let (mode, val) = val.split_at(index);
+                        let mode_type = ModeType::from_str(mode)?;
+
+                        let path =
+                            PathBuf::from_str(val).map_err(|_| "Invalid test asset path")?;
+                        Ok(BridgeMode::GenerateTestData(mode_type, path))
+                    }
                     "test" => {
                         let path =
                             PathBuf::from_str(&val[1..]).map_err(|_| "Invalid test asset path")?;
