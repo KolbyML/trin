@@ -52,6 +52,7 @@ use crate::{
     storage::{ContentStore, ShouldWeStoreContent},
     types::node::Node,
     utils::portal_wire,
+    utp_controller::UtpController,
 };
 use ethportal_api::generate_random_node_id;
 use ethportal_api::types::distance::{Distance, Metric};
@@ -300,8 +301,8 @@ pub struct OverlayService<TContentKey, TMetric, TValidator, TStore> {
     response_rx: UnboundedReceiver<OverlayResponse>,
     /// The sender half of a channel for responses to outgoing requests.
     response_tx: UnboundedSender<OverlayResponse>,
-    /// uTP socket.
-    utp_socket: Arc<UtpSocket<crate::discovery::UtpEnr>>,
+    /// uTP controller.
+    utp_controller: Arc<UtpController>,
     /// Phantom content key.
     phantom_content_key: PhantomData<TContentKey>,
     /// Phantom metric (distance function).
@@ -338,7 +339,7 @@ where
         bootnode_enrs: Vec<Enr>,
         ping_queue_interval: Option<Duration>,
         protocol: ProtocolId,
-        utp_socket: Arc<UtpSocket<crate::discovery::UtpEnr>>,
+        utp_controller: Arc<UtpController>,
         metrics: OverlayMetricsReporter,
         validator: Arc<TValidator>,
         query_timeout: Duration,
@@ -381,7 +382,7 @@ where
                 findnodes_query_distances_per_peer,
                 response_rx,
                 response_tx,
-                utp_socket,
+                utp_controller,
                 phantom_content_key: PhantomData,
                 phantom_metric: PhantomData,
                 metrics,

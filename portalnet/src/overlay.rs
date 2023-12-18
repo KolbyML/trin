@@ -33,6 +33,7 @@ use crate::{
     },
     storage::ContentStore,
     types::node::Node,
+    utp_controller::UtpController,
 };
 use ethportal_api::types::bootnodes::Bootnode;
 use ethportal_api::types::discv5::RoutingTableInfo;
@@ -104,8 +105,8 @@ pub struct OverlayProtocol<TContentKey, TMetric, TValidator, TStore> {
     protocol: ProtocolId,
     /// A sender to send commands to the OverlayService.
     pub command_tx: UnboundedSender<OverlayCommand<TContentKey>>,
-    /// uTP socket.
-    utp_socket: Arc<UtpSocket<UtpEnr>>,
+    /// uTP controller.
+    utp_controller: Arc<UtpController>,
     /// Declare the allowed content key types for a given overlay network.
     /// Use a phantom, because we don't store any keys in this struct.
     /// For example, this type is used when decoding a content key received over the network.
@@ -130,7 +131,7 @@ where
     pub async fn new(
         config: OverlayConfig,
         discovery: Arc<Discovery>,
-        utp_socket: Arc<UtpSocket<UtpEnr>>,
+        utp_controller: Arc<UtpController>,
         store: Arc<RwLock<TStore>>,
         protocol: ProtocolId,
         validator: Arc<TValidator>,
@@ -154,7 +155,7 @@ where
             config.bootnode_enrs,
             config.ping_queue_interval,
             protocol,
-            Arc::clone(&utp_socket),
+            Arc::clone(&utp_controller),
             metrics.clone(),
             Arc::clone(&validator),
             config.query_timeout,
@@ -172,7 +173,7 @@ where
             store,
             protocol,
             command_tx,
-            utp_socket,
+            utp_controller,
             phantom_content_key: PhantomData,
             phantom_metric: PhantomData,
             validator,

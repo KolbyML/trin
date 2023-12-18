@@ -19,6 +19,7 @@ use portalnet::{
     discovery::{Discovery, UtpEnr},
     events::{EventEnvelope, OverlayRequest},
     storage::PortalStorageConfig,
+    utp_controller,
 };
 use trin_validation::oracle::HeaderOracle;
 
@@ -52,7 +53,7 @@ pub async fn initialize_state_network(
     let (state_event_tx, state_event_rx) = mpsc::unbounded_channel::<OverlayRequest>();
     let state_network = StateNetwork::new(
         Arc::clone(discovery),
-        utp_socket,
+        utp_controller,
         storage_config,
         portalnet_config.clone(),
         header_oracle,

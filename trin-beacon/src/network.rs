@@ -15,6 +15,7 @@ use portalnet::{
     discovery::{Discovery, UtpEnr},
     overlay::{OverlayConfig, OverlayProtocol},
     storage::{PortalStorage, PortalStorageConfig},
+    utp_controller::{self, UtpController},
 };
 use trin_validation::oracle::HeaderOracle;
 
@@ -27,7 +28,7 @@ pub struct BeaconNetwork {
 impl BeaconNetwork {
     pub async fn new(
         discovery: Arc<Discovery>,
-        utp_socket: Arc<UtpSocket<UtpEnr>>,
+        utp_controller: Arc<UtpController>,
         storage_config: PortalStorageConfig,
         portal_config: PortalnetConfig,
         header_oracle: Arc<RwLock<HeaderOracle>>,
@@ -45,7 +46,7 @@ impl BeaconNetwork {
         let overlay = OverlayProtocol::new(
             config,
             discovery,
-            utp_socket,
+            utp_controller,
             storage,
             ProtocolId::Beacon,
             validator,
