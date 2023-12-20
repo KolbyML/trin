@@ -66,6 +66,7 @@ pub async fn run_trin(
     let utp_controller = UtpController::new(
         trin_config.inbound_utp_transfer_limit,
         trin_config.outbound_utp_transfer_limit,
+        3,
         utp_socket,
     );
     let utp_controller = Arc::new(utp_controller);

@@ -30,6 +30,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{self, UnboundedReceiver, UnboundedSender},
+        Semaphore, SemaphorePermit,
     },
     task::JoinHandle,
 };
@@ -52,7 +53,7 @@ use crate::{
     storage::{ContentStore, ShouldWeStoreContent},
     types::node::Node,
     utils::portal_wire,
-    utp_controller::UtpController,
+    utp_controller::{UtpController, UtpDirection},
 };
 use ethportal_api::generate_random_node_id;
 use ethportal_api::types::distance::{Distance, Metric};
@@ -826,7 +827,7 @@ where
                         nodes_to_poke,
                     } => {
                         let metrics = self.metrics.clone();
-                        let utp = self.utp_socket.clone();
+                        let utp = self.utp_controller.clone();
                         let source = match self.find_enr(&peer) {
                             Some(enr) => enr,
                             _ => {
@@ -1117,8 +1118,13 @@ where
                 ))
             }
         };
-        match self.store.read().get(&content_key) {
-            Ok(Some(content)) => {
+        match (
+            self.store.read().get(&content_key),
+            self.utp_controller
+                .outbound_utp_transfer_semaphore
+                .try_acquire_owned(),
+        ) {
+            (Ok(Some(content)), Ok(_permit)) => {
                 if content.len() <= MAX_PORTAL_CONTENT_PAYLOAD_SIZE {
                     Ok(Content::Content(content))
                 } else {
@@ -1129,12 +1135,12 @@ where
                         )
                     })?;
                     let enr = crate::discovery::UtpEnr(node_addr.enr);
-                    let cid = self.utp_socket.cid(enr, false);
+                    let cid = self.utp_controller.cid(enr, false);
                     let cid_send = cid.send;
 
                     // Wait for an incoming connection with the given CID. Then, write the data
                     // over the uTP stream.
-                    let utp = Arc::clone(&self.utp_socket);
+                    let utp = Arc::clone(&self.utp_controller);
                     let metrics = self.metrics.clone();
                     tokio::spawn(async move {
                         metrics.report_utp_active_inc(UtpDirectionLabel::Outbound);
@@ -1171,7 +1177,7 @@ where
                     Ok(Content::ConnectionId(cid_send.to_be()))
                 }
             }
-            Ok(None) => {
+            (Ok(Some(_)), _) | (Ok(None), _) => {
                 let enrs = self.find_nodes_close_to_content(content_key);
                 match enrs {
                     Ok(mut val) => {
@@ -1182,7 +1188,7 @@ where
                     Err(msg) => Err(OverlayRequestError::InvalidRequest(msg.to_string())),
                 }
             }
-            Err(msg) => Err(OverlayRequestError::Failure(format!(
+            (Err(msg), _) => Err(OverlayRequestError::Failure(format!(
                 "Unable to respond to FindContent: {msg}",
             ))),
         }
@@ -1208,6 +1214,21 @@ where
                     "Unable to initialize bitlist for requested keys.".to_owned(),
                 )
             })?;
+
+        // Attempt to get semaphore permit if fails we return an empty accept
+        let permit = match self
+            .utp_controller
+            .inbound_utp_transfer_semaphore
+            .try_acquire_owned()
+        {
+            Ok(permit) => permit,
+            Err(_) => {
+                return Ok(Accept {
+                    connection_id: 0,
+                    content_keys: requested_keys,
+                });
+            }
+        };
 
         let content_keys: Vec<TContentKey> = request
             .content_keys
@@ -1259,13 +1280,14 @@ where
         } else {
             String::with_capacity(0)
         };
-        let cid = self.utp_socket.cid(enr, false);
+        let cid: utp_rs::cid::ConnectionId<crate::discovery::UtpEnr> =
+            self.utp_controller.cid(enr, false);
         let cid_send = cid.send;
         let validator = Arc::clone(&self.validator);
         let store = Arc::clone(&self.store);
         let kbuckets = Arc::clone(&self.kbuckets);
         let command_tx = self.command_tx.clone();
-        let utp = Arc::clone(&self.utp_socket);
+        let utp = Arc::clone(&self.utp_controller);
         let metrics = self.metrics.clone();
 
         let content_keys_string: Vec<String> = content_keys
@@ -1323,6 +1345,8 @@ where
             {
                 debug!(%err, cid.send, cid.recv, peer = ?cid.peer.client(), content_keys = ?content_keys_string, "unable to process uTP payload");
             }
+            // explictically drop semaphore permit in thread so it gets moved into it
+            drop(permit);
         });
 
         let accept = Accept {
