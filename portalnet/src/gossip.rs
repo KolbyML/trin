@@ -121,25 +121,7 @@ pub async fn trace_propagate_gossip_cross_thread<TContentKey: OverlayContentKey>
 ) -> GossipResult {
     let mut gossip_result = GossipResult::default();
     // Get all connected nodes from overlay routing table
-    let interested_enrs = {
-        let kbuckets = kbuckets.read();
-        let all_nodes: Vec<&kbucket::Node<NodeId, Node>> = kbuckets
-            .buckets_iter()
-            .flat_map(|kbucket| {
-                kbucket
-                    .iter()
-                    .filter(|node| node.status.is_connected())
-                    .collect::<Vec<&kbucket::Node<NodeId, Node>>>()
-            })
-            .collect();
-
-        if all_nodes.is_empty() {
-            // If there are no nodes whatsoever in the routing table the gossip cannot proceed.
-            warn!("No nodes in routing table, gossip cannot proceed.");
-            return gossip_result;
-        }
-        calculate_interested_enrs(&content_key, &all_nodes)
-    };
+    let interested_enrs = get_interested_enrs(&content_key, kbuckets.clone(), command_tx.clone());
     if interested_enrs.is_empty() {
         return gossip_result;
     };
@@ -191,6 +173,49 @@ pub async fn trace_propagate_gossip_cross_thread<TContentKey: OverlayContentKey>
         }
     }
     gossip_result
+}
+
+/// Filter all nodes from overlay routing table where XOR_distance(content_id, nodeId) < node radius
+fn get_interested_enrs<TContentKey: OverlayContentKey>(
+    content_key: &TContentKey,
+    kbuckets: Arc<RwLock<KBucketsTable<NodeId, Node>>>,
+    command_tx: mpsc::UnboundedSender<OverlayCommand<TContentKey>>,
+) -> Vec<Enr> {
+    let interested_enrs = {
+        let (tx, rx) = oneshot::channel();
+        if let Err(err) = command_tx.send(OverlayCommand::FindNodeQuery {
+            callback: tx,
+            target: NodeId::from(content_key.content_id()),
+        }) {
+            warn!("Error submitting FindNode query to service");
+            return vec![];
+        }
+        let all_nodes = futures::executor::block_on(async { rx.await }).unwrap_or_else(|err| {
+            warn!("Error receiving FindNode query response");
+            vec![]
+        });
+        if !all_nodes.is_empty() {
+            return all_nodes;
+        }
+        let kbuckets = kbuckets.read();
+        let all_nodes: Vec<&kbucket::Node<NodeId, Node>> = kbuckets
+            .buckets_iter()
+            .flat_map(|kbucket| {
+                kbucket
+                    .iter()
+                    .filter(|node| node.status.is_connected())
+                    .collect::<Vec<&kbucket::Node<NodeId, Node>>>()
+            })
+            .collect();
+
+        if all_nodes.is_empty() {
+            // If there are no nodes whatsoever in the routing table the gossip cannot proceed.
+            warn!("No nodes in routing table, gossip cannot proceed.");
+            return vec![];
+        }
+        calculate_interested_enrs(content_key, &all_nodes)
+    };
+    interested_enrs
 }
 
 /// Filter all nodes from overlay routing table where XOR_distance(content_id, nodeId) < node radius
