@@ -958,7 +958,7 @@ where
                 let content_items = vec![(content_key.clone().into(), content.clone())];
                 let offer_request = Request::PopulatedOffer(PopulatedOffer { content_items });
 
-                // if we have met the max outbound utp transfer limit containue the loop as we aren't allow to generate another utp stream
+                // if we have met the max outbound utp transfer limit continue the loop as we aren't allow to generate another utp stream
                 let permit = match utp_controller
                     .outbound_utp_transfer_semaphore
                     .clone()
@@ -1203,6 +1203,7 @@ where
                     Ok(Content::ConnectionId(cid_send.to_be()))
                 }
             }
+            // If we don't have data to send back or can't obtain a permit, send the requester a list of closer ENR
             (Ok(Some(_)), _) | (Ok(None), _) => {
                 let enrs = self.find_nodes_close_to_content(content_key);
                 match enrs {
@@ -1709,7 +1710,7 @@ where
                     }
                 }
             }
-            // explicitally drop permit in the thread so the permit is included in the thread
+            // explicitly drop permit in the thread so the permit is included in the thread
             if let Some(permit) = request_permit {
                 drop(permit);
             }

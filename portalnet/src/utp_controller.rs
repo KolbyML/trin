@@ -10,7 +10,7 @@ use crate::discovery::UtpEnr;
 /// extending overlay_service even more.
 /// Currently we are implementing this to control the max utp_transfer_limit
 /// But in the future this will be where we implement
-/// - thunder hurding protection
+/// - thundering herd protection
 /// - killing bad uTP connections which won't send us data or is purposefully keeping the connection open
 pub struct UtpController {
     pub inbound_utp_transfer_semaphore: Arc<Semaphore>,
