@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use std::io;
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 use utp_rs::{cid::ConnectionId, conn::ConnectionConfig, socket::UtpSocket, stream::UtpStream};
 
