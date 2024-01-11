@@ -63,11 +63,7 @@ pub async fn run_trin(
     let (utp_talk_reqs_tx, utp_talk_reqs_rx) = mpsc::unbounded_channel();
     let discv5_utp_socket = Discv5UdpSocket::new(Arc::clone(&discovery), utp_talk_reqs_rx);
     let utp_socket = UtpSocket::with_socket(discv5_utp_socket);
-    let utp_controller = UtpController::new(
-        trin_config.inbound_utp_transfer_limit,
-        trin_config.outbound_utp_transfer_limit,
-        utp_socket,
-    );
+    let utp_controller = UtpController::new(trin_config.utp_transfer_limit, utp_socket);
     let utp_controller = Arc::new(utp_controller);
 
     let storage_config = PortalStorageConfig::new(

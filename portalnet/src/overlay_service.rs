@@ -35,10 +35,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, enabled, error, info, trace, warn, Level};
-use utp_rs::{conn::ConnectionConfig, stream::UtpStream};
+use utp_rs::{cid::ConnectionId, conn::ConnectionConfig, stream::UtpStream};
 
 use crate::{
-    discovery::Discovery,
+    discovery::{Discovery, UtpEnr},
     events::{EventEnvelope, OverlayEvent},
     find::{
         iterators::{
@@ -851,7 +851,7 @@ where
                         let cid = utp_rs::cid::ConnectionId {
                             recv: connection_id,
                             send: connection_id.wrapping_add(1),
-                            peer: crate::discovery::UtpEnr(source),
+                            peer: UtpEnr(source),
                         };
                         let validator = self.validator.clone();
                         let store = self.store.clone();
@@ -958,6 +958,7 @@ where
                 let content_items = vec![(content_key.clone().into(), content.clone())];
                 let offer_request = Request::PopulatedOffer(PopulatedOffer { content_items });
 
+                // if we have met the max outbound utp transfer limit containue the loop as we aren't allow to generate another utp stream
                 let permit = match utp_controller
                     .outbound_utp_transfer_semaphore
                     .clone()
@@ -1148,7 +1149,7 @@ where
                 .clone()
                 .try_acquire_owned(),
         ) {
-            (Ok(Some(content)), Ok(_permit)) => {
+            (Ok(Some(content)), Ok(permit)) => {
                 if content.len() <= MAX_PORTAL_CONTENT_PAYLOAD_SIZE {
                     Ok(Content::Content(content))
                 } else {
@@ -1158,7 +1159,7 @@ where
                             "unable to find ENR for NodeId".to_string(),
                         )
                     })?;
-                    let enr = crate::discovery::UtpEnr(node_addr.enr);
+                    let enr = UtpEnr(node_addr.enr);
                     let cid = self.utp_controller.cid(enr, false);
                     let cid_send = cid.send;
 
@@ -1195,6 +1196,7 @@ where
                                 "Error sending content over uTP, in response to FindContent"
                             );
                         }
+                        drop(permit);
                     });
 
                     // Connection id is send as BE because uTP header values are stored also as BE
@@ -1299,14 +1301,13 @@ where
         let node_addr = self.discovery.cached_node_addr(source).ok_or_else(|| {
             OverlayRequestError::AcceptError("unable to find ENR for NodeId".to_string())
         })?;
-        let enr = crate::discovery::UtpEnr(node_addr.enr);
+        let enr = UtpEnr(node_addr.enr);
         let enr_str = if enabled!(Level::TRACE) {
             enr.0.to_base64()
         } else {
             String::with_capacity(0)
         };
-        let cid: utp_rs::cid::ConnectionId<crate::discovery::UtpEnr> =
-            self.utp_controller.cid(enr, false);
+        let cid: ConnectionId<UtpEnr> = self.utp_controller.cid(enr, false);
         let cid_send = cid.send;
         let validator = Arc::clone(&self.validator);
         let store = Arc::clone(&self.store);
@@ -1370,7 +1371,7 @@ where
             {
                 debug!(%err, cid.send, cid.recv, peer = ?cid.peer.client(), content_keys = ?content_keys_string, "unable to process uTP payload");
             }
-            // explictically drop semaphore permit in thread so it gets moved into it
+            // explictically drop semaphore permit in thread so the permit is moved into the thread
             drop(permit);
         });
 
@@ -1603,7 +1604,7 @@ where
         let cid = utp_rs::cid::ConnectionId {
             recv: conn_id,
             send: conn_id.wrapping_add(1),
-            peer: crate::discovery::UtpEnr(enr),
+            peer: UtpEnr(enr),
         };
 
         let store = Arc::clone(&self.store);
@@ -1708,7 +1709,7 @@ where
                     }
                 }
             }
-            // explicitally drop permit in new thread so it it is included in the move
+            // explicitally drop permit in the thread so the permit is included in the thread
             if let Some(permit) = request_permit {
                 drop(permit);
             }
@@ -1844,7 +1845,7 @@ where
     }
 
     async fn send_utp_content(
-        mut stream: UtpStream<crate::discovery::UtpEnr>,
+        mut stream: UtpStream<UtpEnr>,
         content: &[u8],
         metrics: OverlayMetricsReporter,
     ) -> anyhow::Result<()> {
@@ -2754,7 +2755,7 @@ mod tests {
         let discv5_utp =
             crate::discovery::Discv5UdpSocket::new(Arc::clone(&discovery), utp_talk_req_rx);
         let utp_socket = utp_rs::socket::UtpSocket::with_socket(discv5_utp);
-        let utp_controller = UtpController::new(100, 100, utp_socket);
+        let utp_controller = UtpController::new(50, utp_socket);
         let utp_controller = Arc::new(utp_controller);
 
         let node_id = discovery.local_enr().node_id();
