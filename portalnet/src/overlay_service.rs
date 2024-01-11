@@ -1720,7 +1720,7 @@ where
                     }
                 }
             }
-            // explicitly drop permit in the thread so the permit is included in the thread
+            // explicitally drop permit in the thread so the permit is included in the thread
             if let Some(permit) = request_permit {
                 drop(permit);
             }
