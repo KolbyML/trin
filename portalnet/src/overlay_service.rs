@@ -864,7 +864,12 @@ where
                         let command_tx = self.command_tx.clone();
                         let disable_poke = self.disable_poke;
                         tokio::spawn(async move {
-                            metrics.report_utp_active_inc(UtpDirectionLabel::Inbound);
+                            metrics.report_utp_active_inc(
+                                UtpDirectionLabel::Inbound,
+                                cid.peer.client(),
+                                cid.send,
+                                "handle_find_content_query_event".to_string(),
+                            );
                             let mut stream = match utp
                                 .connect_with_cid(cid.clone(), *UTP_CONN_CFG)
                                 .await
@@ -874,6 +879,9 @@ where
                                     metrics.report_utp_outcome(
                                         UtpDirectionLabel::Inbound,
                                         UtpOutcomeLabel::FailedConnection,
+                                        cid.peer.client(),
+                                        cid.send,
+                                        "handle_find_content_query_event".to_string(),
                                     );
                                     debug!(
                                         %err,
@@ -894,6 +902,9 @@ where
                                 metrics.report_utp_outcome(
                                     UtpDirectionLabel::Inbound,
                                     UtpOutcomeLabel::FailedDataTx,
+                                    cid.peer.client(),
+                                    cid.send,
+                                    "handle_find_content_query_event".to_string(),
                                 );
                                 debug!(%err, cid.send, cid.recv, peer = ?cid.peer.client(), "error reading data from uTP stream, while handling a FindContent request.");
                                 if let Some(responder) = callback {
@@ -907,6 +918,9 @@ where
                             metrics.report_utp_outcome(
                                 UtpDirectionLabel::Inbound,
                                 UtpOutcomeLabel::Success,
+                                cid.peer.client(),
+                                cid.send,
+                                "handle_find_content_query_event".to_string(),
                             );
 
                             let trace = query_info.trace;
@@ -1175,13 +1189,21 @@ where
                     let utp = Arc::clone(&self.utp_controller);
                     let metrics = self.metrics.clone();
                     tokio::spawn(async move {
-                        metrics.report_utp_active_inc(UtpDirectionLabel::Outbound);
+                        metrics.report_utp_active_inc(
+                            UtpDirectionLabel::Outbound,
+                            cid.peer.client(),
+                            cid.send,
+                            "handle_find_content".to_string(),
+                        );
                         let stream = match utp.accept_with_cid(cid.clone(), *UTP_CONN_CFG).await {
                             Ok(stream) => stream,
                             Err(err) => {
                                 metrics.report_utp_outcome(
                                     UtpDirectionLabel::Outbound,
                                     UtpOutcomeLabel::FailedConnection,
+                                    cid.peer.client(),
+                                    cid.send,
+                                    "handle_find_content".to_string(),
                                 );
                                 debug!(
                                     %err,
@@ -1193,7 +1215,14 @@ where
                                 return;
                             }
                         };
-                        if let Err(err) = Self::send_utp_content(stream, &content, metrics).await {
+                        if let Err(err) = Self::send_utp_content(
+                            stream,
+                            &content,
+                            metrics,
+                            "handle_find_content".to_string(),
+                        )
+                        .await
+                        {
                             debug!(
                                 %err,
                                 %cid.send,
@@ -1343,13 +1372,21 @@ where
         tokio::spawn(async move {
             // Wait for an incoming connection with the given CID. Then, read the data from the uTP
             // stream.
-            metrics.report_utp_active_inc(UtpDirectionLabel::Inbound);
+            metrics.report_utp_active_inc(
+                UtpDirectionLabel::Inbound,
+                cid.peer.client(),
+                cid.send,
+                "handle_offer".to_string(),
+            );
             let mut stream = match utp.accept_with_cid(cid.clone(), *UTP_CONN_CFG).await {
                 Ok(stream) => stream,
                 Err(err) => {
                     metrics.report_utp_outcome(
                         UtpDirectionLabel::Inbound,
                         UtpOutcomeLabel::FailedConnection,
+                        cid.peer.client(),
+                        cid.send,
+                        "handle_offer".to_string(),
                     );
                     debug!(%err, cid.send, cid.recv, peer = ?cid.peer.client(), content_keys = ?content_keys_string, "unable to accept uTP stream");
                     return;
@@ -1358,14 +1395,25 @@ where
 
             let mut data = vec![];
             if let Err(err) = stream.read_to_eof(&mut data).await {
-                metrics
-                    .report_utp_outcome(UtpDirectionLabel::Inbound, UtpOutcomeLabel::FailedDataTx);
+                metrics.report_utp_outcome(
+                    UtpDirectionLabel::Inbound,
+                    UtpOutcomeLabel::FailedDataTx,
+                    cid.peer.client(),
+                    cid.send,
+                    "handle_offer".to_string(),
+                );
                 debug!(%err, cid.send, cid.recv, peer = ?cid.peer.client(), content_keys = ?content_keys_string, "error reading data from uTP stream, while handling an Offer request.");
                 return;
             }
 
             // report utp tx as successful, even if we go on to fail to process the payload
-            metrics.report_utp_outcome(UtpDirectionLabel::Inbound, UtpOutcomeLabel::Success);
+            metrics.report_utp_outcome(
+                UtpDirectionLabel::Inbound,
+                UtpOutcomeLabel::Success,
+                cid.peer.client(),
+                cid.send,
+                "handle_offer".to_string(),
+            );
 
             if let Err(err) = Self::process_accept_utp_payload(
                 validator,
@@ -1625,13 +1673,21 @@ where
         let metrics = self.metrics.clone();
 
         tokio::spawn(async move {
-            metrics.report_utp_active_inc(UtpDirectionLabel::Outbound);
+            metrics.report_utp_active_inc(
+                UtpDirectionLabel::Outbound,
+                cid.peer.client(),
+                cid.send,
+                "process_accept".to_string(),
+            );
             let stream = match utp.connect_with_cid(cid.clone(), *UTP_CONN_CFG).await {
                 Ok(stream) => stream,
                 Err(err) => {
                     metrics.report_utp_outcome(
                         UtpDirectionLabel::Outbound,
                         UtpOutcomeLabel::FailedConnection,
+                        cid.peer.client(),
+                        cid.recv,
+                        "process_accept".to_string(),
                     );
                     debug!(
                         %err,
@@ -1701,7 +1757,14 @@ where
             };
 
             // send the content to the acceptor over a uTP stream
-            match Self::send_utp_content(stream, &content_payload, metrics).await {
+            match Self::send_utp_content(
+                stream,
+                &content_payload,
+                metrics,
+                "process_accept".to_string(),
+            )
+            .await
+            {
                 Ok(_) => {
                     if let Some(tx) = gossip_result_tx {
                         let _ = tx.send(true);
@@ -1867,6 +1930,7 @@ where
         mut stream: UtpStream<UtpEnr>,
         content: &[u8],
         metrics: OverlayMetricsReporter,
+        prev_func: String,
     ) -> anyhow::Result<()> {
         match stream.write(content).await {
             Ok(write_size) => {
@@ -1874,6 +1938,9 @@ where
                     metrics.report_utp_outcome(
                         UtpDirectionLabel::Outbound,
                         UtpOutcomeLabel::FailedDataTx,
+                        stream.cid().peer.client(),
+                        stream.cid().send,
+                        prev_func,
                     );
                     return Err(anyhow!(
                         "uTP write exited before sending all content: {write_size} bytes written, {} bytes expected",
@@ -1882,19 +1949,35 @@ where
                 }
             }
             Err(err) => {
-                metrics
-                    .report_utp_outcome(UtpDirectionLabel::Outbound, UtpOutcomeLabel::FailedDataTx);
+                metrics.report_utp_outcome(
+                    UtpDirectionLabel::Outbound,
+                    UtpOutcomeLabel::FailedDataTx,
+                    stream.cid().peer.client(),
+                    stream.cid().send,
+                    prev_func,
+                );
                 return Err(anyhow!("Error writing content to uTP stream: {err}"));
             }
         }
 
         // close uTP connection
         if let Err(err) = stream.close().await {
-            metrics
-                .report_utp_outcome(UtpDirectionLabel::Outbound, UtpOutcomeLabel::FailedShutdown);
+            metrics.report_utp_outcome(
+                UtpDirectionLabel::Outbound,
+                UtpOutcomeLabel::FailedShutdown,
+                stream.cid().peer.client(),
+                stream.cid().send,
+                prev_func,
+            );
             return Err(anyhow!("Error closing uTP connection: {err}"));
         };
-        metrics.report_utp_outcome(UtpDirectionLabel::Outbound, UtpOutcomeLabel::Success);
+        metrics.report_utp_outcome(
+            UtpDirectionLabel::Outbound,
+            UtpOutcomeLabel::Success,
+            stream.cid().peer.client(),
+            stream.cid().send,
+            prev_func,
+        );
         Ok(())
     }
 

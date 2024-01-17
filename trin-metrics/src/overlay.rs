@@ -36,7 +36,7 @@ impl OverlayMetrics {
                 "trin_utp_outcome_total",
                 "track success rate for all utp transfers outbound and inbound"
             ),
-            &["protocol", "direction", "outcome"],
+            &["protocol", "direction", "outcome", "client"],
             registry
         )?;
         let utp_active_gauge = register_int_gauge_vec_with_registry!(
@@ -44,7 +44,7 @@ impl OverlayMetrics {
                 "trin_utp_active_streams",
                 "count all active utp transfers outbound and inbound"
             ),
-            &["protocol", "direction"],
+            &["protocol", "direction", "client", "client_id", "where_tag"],
             registry
         )?;
         let validation_total = register_int_counter_vec_with_registry!(
@@ -117,7 +117,7 @@ impl OverlayMetricsReporter {
     //
 
     fn utp_active_streams(&self, direction: UtpDirectionLabel) -> u64 {
-        let labels: [&str; 2] = [&self.protocol, direction.into()];
+        let labels: [&str; 5] = [&self.protocol, direction.into(), "t", "1", "h"];
         self.overlay_metrics
             .utp_active_gauge
             .with_label_values(&labels)
@@ -125,32 +125,68 @@ impl OverlayMetricsReporter {
     }
 
     fn utp_outcome_total(&self, direction: UtpDirectionLabel, outcome: UtpOutcomeLabel) -> u64 {
-        let labels: [&str; 3] = [&self.protocol, direction.into(), outcome.into()];
+        let labels: [&str; 4] = [&self.protocol, direction.into(), outcome.into(), "t"];
         self.overlay_metrics
             .utp_outcome_total
             .with_label_values(&labels)
             .get()
     }
 
-    pub fn report_utp_outcome(&self, direction: UtpDirectionLabel, outcome: UtpOutcomeLabel) {
-        let labels: [&str; 3] = [&self.protocol, direction.into(), outcome.into()];
+    pub fn report_utp_outcome(
+        &self,
+        direction: UtpDirectionLabel,
+        outcome: UtpOutcomeLabel,
+        client: Option<String>,
+        client_id: u16,
+        where_from: String,
+    ) {
+        let labels: [&str; 4] = [
+            &self.protocol,
+            direction.into(),
+            outcome.into(),
+            &client.clone().unwrap_or("unknown".into()),
+        ];
         self.overlay_metrics
             .utp_outcome_total
             .with_label_values(&labels)
             .inc();
-        self.report_utp_active_dec(direction);
+        self.report_utp_active_dec(direction, client, client_id, where_from);
     }
 
-    pub fn report_utp_active_inc(&self, direction: UtpDirectionLabel) {
-        let labels: [&str; 2] = [&self.protocol, direction.into()];
+    pub fn report_utp_active_inc(
+        &self,
+        direction: UtpDirectionLabel,
+        client: Option<String>,
+        client_id: u16,
+        where_from: String,
+    ) {
+        let labels: [&str; 5] = [
+            &self.protocol,
+            direction.into(),
+            &client.unwrap_or("unknown".into()),
+            &client_id.to_string(),
+            &where_from,
+        ];
         self.overlay_metrics
             .utp_active_gauge
             .with_label_values(&labels)
             .inc();
     }
 
-    pub fn report_utp_active_dec(&self, direction: UtpDirectionLabel) {
-        let labels: [&str; 2] = [&self.protocol, direction.into()];
+    pub fn report_utp_active_dec(
+        &self,
+        direction: UtpDirectionLabel,
+        client: Option<String>,
+        client_id: u16,
+        where_from: String,
+    ) {
+        let labels: [&str; 5] = [
+            &self.protocol,
+            direction.into(),
+            &client.unwrap_or("unknown".into()),
+            &client_id.to_string(),
+            &where_from,
+        ];
         self.overlay_metrics
             .utp_active_gauge
             .with_label_values(&labels)
