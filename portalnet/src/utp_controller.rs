@@ -40,7 +40,20 @@ impl UtpController {
         cid: ConnectionId<UtpEnr>,
         config: ConnectionConfig,
     ) -> io::Result<UtpStream<UtpEnr>> {
-        self.utp_socket.accept_with_cid(cid, config).await
+        tracing::error!(
+            %cid.send,
+            %cid.recv,
+            peer = ?cid.peer.client(),
+            "Abba 2"
+        );
+        let hi = self.utp_socket.accept_with_cid(cid.clone(), config).await;
+        tracing::error!(
+            %cid.send,
+            %cid.recv,
+            peer = ?cid.peer.client(),
+            "Abba 2.1"
+        );
+        hi
     }
     pub fn cid(&self, peer: UtpEnr, is_initiator: bool) -> ConnectionId<UtpEnr> {
         self.utp_socket.cid(peer, is_initiator)

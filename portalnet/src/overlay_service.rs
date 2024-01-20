@@ -541,6 +541,13 @@ where
                         match response.response {
                             Ok(response) => {
                                 self.metrics.report_inbound_response(&response);
+                                if let Response::Accept(accept) = response.clone() {
+                                tracing::error!(
+                                    %accept.connection_id,
+                                    peer = ?request.request_permit.is_some(),
+                                    "big mac big mac3"
+                                );
+                                }
                                 self.process_response(response, request.destination, request.request, request.query_id, request.request_permit)
                             }
                             Err(error) => self.process_request_failure(response.request_id, request.destination, error),
@@ -1195,6 +1202,12 @@ where
                             cid.send,
                             "handle_find_content".to_string(),
                         );
+                        tracing::error!(
+                            %cid.send,
+                            %cid.recv,
+                            peer = ?cid.peer.client(),
+                            "Abba 1"
+                        );
                         let stream = match utp.accept_with_cid(cid.clone(), *UTP_CONN_CFG).await {
                             Ok(stream) => stream,
                             Err(err) => {
@@ -1205,7 +1218,7 @@ where
                                     cid.send,
                                     "handle_find_content".to_string(),
                                 );
-                                debug!(
+                                tracing::error!(
                                     %err,
                                     %cid.send,
                                     %cid.recv,
@@ -1215,6 +1228,12 @@ where
                                 return;
                             }
                         };
+                        tracing::error!(
+                            %cid.send,
+                            %cid.recv,
+                            peer = ?cid.peer.client(),
+                            "Abba 3"
+                        );
                         if let Err(err) = Self::send_utp_content(
                             stream,
                             &content,
@@ -1223,7 +1242,7 @@ where
                         )
                         .await
                         {
-                            debug!(
+                            tracing::error!(
                                 %err,
                                 %cid.send,
                                 %cid.recv,
@@ -1232,6 +1251,12 @@ where
                                 "Error sending content over uTP, in response to FindContent"
                             );
                         }
+                        tracing::error!(
+                            %cid.send,
+                            %cid.recv,
+                            peer = ?cid.peer.client(),
+                            "Abba 4"
+                        );
                         drop(permit);
                     });
 
@@ -1660,11 +1685,23 @@ where
 
         // Build a connection ID based on the response.
         let conn_id = u16::from_be(response.connection_id);
+        tracing::error!(
+            %response.connection_id,
+            %conn_id,
+            peer = ?request_permit.is_some(),
+            "big mac big mac5"
+        );
         let cid = utp_rs::cid::ConnectionId {
             recv: conn_id,
             send: conn_id.wrapping_add(1),
             peer: UtpEnr(enr),
         };
+        tracing::error!(
+            %conn_id,
+            %cid.send,
+            peer = ?request_permit.is_some(),
+            "big mac big mac6"
+        );
 
         let store = Arc::clone(&self.store);
         let response_clone = response.clone();
@@ -1783,8 +1820,20 @@ where
                     }
                 }
             }
+            tracing::error!(
+                %cid.send,
+                %cid.recv,
+                peer = ?cid.peer.client(),
+                "big mac big mac2"
+            );
             // explicitly drop permit in the thread so the permit is included in the thread
             if let Some(permit) = request_permit {
+                tracing::error!(
+                    %cid.send,
+                    %cid.recv,
+                    peer = ?cid.peer.client(),
+                    "big mac big mac"
+                );
                 drop(permit);
             }
         });
