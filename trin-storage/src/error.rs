@@ -30,8 +30,8 @@ pub enum ContentStoreError {
     #[error("rusqlite error {0}")]
     Rusqlite(#[from] rusqlite::Error),
 
-    #[error("r2d2 error {0}")]
-    R2D2(#[from] r2d2::Error),
+    #[error("deadpool_r2d2 error {0}")]
+    Rusqlite(#[from] deadpool_r2d2::InteractError),
 
     #[error("unable to use byte utils {0}")]
     ByteUtilsError(#[from] ByteUtilsError),

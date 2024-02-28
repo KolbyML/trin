@@ -7,24 +7,41 @@ use crate::{
     versioned::sql::STORE_INFO_CREATE_TABLE,
     DATABASE_NAME,
 };
-use r2d2::Pool;
+use anyhow::Error;
+use deadpool_r2d2::{Manager, Pool, Runtime};
 use r2d2_sqlite::SqliteConnectionManager;
 use std::{fs, path::Path};
 use tracing::info;
 
+type SqliteManager = Manager<SqliteConnectionManager>;
+type SqlitePool = Pool<SqliteManager>;
+
 /// Helper function for opening a SQLite connection.
-pub fn setup_sql(node_data_dir: &Path) -> Result<Pool<SqliteConnectionManager>, ContentStoreError> {
+pub async fn setup_sql(node_data_dir: &Path) -> Result<SqlitePool, ContentStoreError> {
     let sql_path = node_data_dir.join(DATABASE_NAME);
     info!(path = %sql_path.display(), "Setting up SqliteDB");
 
-    let manager = SqliteConnectionManager::file(sql_path);
-    let pool = Pool::new(manager)?;
-    let conn = pool.get()?;
-    conn.execute_batch(CREATE_QUERY_DB_HISTORY)?;
-    conn.execute_batch(CREATE_QUERY_DB_BEACON)?;
-    conn.execute_batch(LC_UPDATE_CREATE_TABLE)?;
-    conn.execute_batch(STORE_INFO_CREATE_TABLE)?;
-    conn.execute_batch(DROP_CONTENT_DATA_QUERY_DB)?;
+    // let manager = SqliteConnectionManager::file(sql_path);
+    // let pool = Pool::new(manager)?;
+    // let conn = pool.get()?;
+    // conn.execute_batch(CREATE_QUERY_DB_HISTORY)?;
+    // conn.execute_batch(CREATE_QUERY_DB_BEACON)?;
+    // conn.execute_batch(LC_UPDATE_CREATE_TABLE)?;
+    // conn.execute_batch(STORE_INFO_CREATE_TABLE)?;
+    // conn.execute_batch(DROP_CONTENT_DATA_QUERY_DB)?;
+    let r2d2_manager: SqliteConnectionManager = SqliteConnectionManager::file(sql_path);
+    let manager: Manager<SqliteConnectionManager> =
+        SqliteManager::new(r2d2_manager, Runtime::Tokio1);
+    let pool: Pool<Manager<SqliteConnectionManager>> =
+        SqlitePool::builder(manager).max_size(10).build().unwrap();
+
+    let conn = pool.get().await.unwrap();
+    conn.interact(|conn| conn.execute_batch(CREATE_QUERY_DB))
+        .await??;
+    conn.interact(|conn| conn.execute_batch(LC_UPDATE_CREATE_TABLE))
+        .await??;
+    conn.interact(|conn| conn.execute_batch(STORE_INFO_CREATE_TABLE))
+        .await??;
     Ok(pool)
 }
 
