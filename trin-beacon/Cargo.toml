@@ -23,7 +23,7 @@ rusqlite = { version = "0.31.0", features = ["bundled"] }
 light-client = { path = "../light-client" }
 serde_json = "1.0.89"
 ssz_types = "0.5.4"
-tokio = { version = "1.14.0", features = ["full"] }
+tokio = { version = "1.21.0", features = ["full", "tracing"] }
 tracing = "0.1.36"
 trin-metrics = { path = "../trin-metrics" }
 trin-storage = { path = "../trin-storage" }

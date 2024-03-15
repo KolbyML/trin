@@ -41,7 +41,7 @@ ssz_types = "0.5.4"
 stunclient = "0.1.2"
 tempfile = "3.3.0"
 thiserror = "1.0.57"
-tokio = { version = "1.14.0", features = ["full"] }
+tokio = { version = "1.21.0", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 tracing = "0.1.36"
 trin-metrics = { path = "../trin-metrics" }

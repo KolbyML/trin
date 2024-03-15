@@ -21,7 +21,7 @@ portalnet = { path = "../portalnet" }
 r2d2 = "0.8.9"
 r2d2_sqlite = "0.24.0"
 serde_json = "1.0.89"
-tokio = { version = "1.14.0", features = ["full"] }
+tokio = { version = "1.21.0", features = ["full", "tracing"] }
 tracing = "0.1.36"
 tree_hash = "0.5.2"
 trin-metrics = { path = "../trin-metrics" }

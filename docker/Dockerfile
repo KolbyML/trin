@@ -32,7 +32,7 @@ COPY ./trin-validation ./trin-validation
 COPY ./utp-testing ./utp-testing
 
 # build for release
-RUN cargo build -p trin --release
+RUN RUSTFLAGS="--cfg tokio_unstable" cargo build -p trin --release
 
 # final base
 FROM ubuntu:22.04
