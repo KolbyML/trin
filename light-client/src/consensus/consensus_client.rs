@@ -1,7 +1,7 @@
 use std::{cmp, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use chrono::Duration;
+use chrono::{Duration, TimeDelta};
 use log::{debug, info, warn};
 use milagro_bls::PublicKey;
 use ssz_rs::prelude::*;
@@ -561,7 +561,7 @@ impl<R: ConsensusRpc> ConsensusLightClient<R> {
         let time_to_next_slot = next_slot_timestamp - now;
         let next_update = time_to_next_slot + 4;
 
-        Duration::seconds(next_update as i64)
+        TimeDelta::try_seconds(next_update as i64).expect("TimeDelta should be valid")
     }
 
     // Determines blockhash_slot age and returns true if it is less than 14 days old

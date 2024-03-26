@@ -1,9 +1,11 @@
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use ethereum_types::{H160, H256, U256, U64};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, Value};
+
+use reth_primitives::TransactionSigned;
 
 use super::receipts::TransactionId;
 use crate::utils::bytes::hex_decode;
@@ -104,6 +106,14 @@ impl<'de> Deserialize<'de> for Transaction {
                 Ok(Self::Blob(helper.into()))
             }
         }
+    }
+}
+
+impl From<TransactionSigned> for Transaction {
+    fn from(tx: TransactionSigned) -> Self {
+        let mut buf = BytesMut::new();
+        tx.encode_enveloped(&mut buf);
+        rlp::decode(&buf).expect("These are matching rlp formats, so this shouldn't error")
     }
 }
 

@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
+use alloy_rlp::Decodable as RethDecodable;
 use anyhow::{anyhow, bail};
 use eth_trie::{EthTrie, MemoryDB, Trie};
 use ethereum_types::H256;
+use reth_primitives::{
+    BlockBody as RethBlockBody, Header as RethHeader, TransactionSigned,
+    Withdrawal as RethWithdrawal, Withdrawals,
+};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::Deserialize;
 use sha3::{Digest, Keccak256};
@@ -187,6 +192,91 @@ impl BlockBody {
 
         trie.root_hash()
             .map_err(|err| anyhow!("Error calculating withdrawals root: {err:?}"))
+    }
+}
+
+impl From<BlockBody> for RethBlockBody {
+    fn from(block_body: BlockBody) -> RethBlockBody {
+        match block_body {
+            BlockBody::Legacy(BlockBodyLegacy { txs, uncles }) => Self {
+                transactions: txs
+                    .into_iter()
+                    .map(|tx| {
+                        TransactionSigned::decode(&mut rlp::encode(&tx).to_vec().as_slice())
+                            .expect("BlockBody to RethBlockBody serialization to work")
+                    })
+                    .collect(),
+                ommers: uncles
+                    .into_iter()
+                    .map(|uncle| {
+                        RethHeader::decode(&mut rlp::encode(&uncle).to_vec().as_slice())
+                            .expect("Header to RethHeader serialization to work")
+                    })
+                    .collect(),
+                withdrawals: None,
+            },
+            BlockBody::Merge(BlockBodyMerge { txs }) => Self {
+                transactions: txs
+                    .into_iter()
+                    .map(|tx| {
+                        TransactionSigned::decode(&mut rlp::encode(&tx).to_vec().as_slice())
+                            .expect("BlockBody to RethBlockBody serialization to work")
+                    })
+                    .collect(),
+                ommers: vec![],
+                withdrawals: None,
+            },
+            BlockBody::Shanghai(BlockBodyShanghai { txs, withdrawals }) => Self {
+                transactions: txs
+                    .into_iter()
+                    .map(|tx| {
+                        TransactionSigned::decode(&mut rlp::encode(&tx).to_vec().as_slice())
+                            .expect("BlockBody to RethBlockBody serialization to work")
+                    })
+                    .collect(),
+                ommers: vec![],
+                withdrawals: Some(Withdrawals::new(
+                    withdrawals
+                        .into_iter()
+                        .map(|withdrawals| {
+                            RethWithdrawal::decode(
+                                &mut rlp::encode(&withdrawals).to_vec().as_slice(),
+                            )
+                            .expect("Withdrawal to RethWithdrawal serialization to work")
+                        })
+                        .collect(),
+                )),
+            },
+        }
+    }
+}
+
+impl From<RethBlockBody> for BlockBody {
+    fn from(block_body: RethBlockBody) -> BlockBody {
+        let RethBlockBody {
+            transactions,
+            ommers,
+            withdrawals,
+        } = block_body;
+
+        match withdrawals {
+            Some(withdrawals) => BlockBody::Shanghai(BlockBodyShanghai {
+                txs: transactions.into_iter().map(|tx| tx.into()).collect(),
+                withdrawals: withdrawals
+                    .into_iter()
+                    .map(|withdrawal| withdrawal.into())
+                    .collect(),
+            }),
+            None => match ommers.is_empty() {
+                false => BlockBody::Legacy(BlockBodyLegacy {
+                    txs: transactions.into_iter().map(|tx| tx.into()).collect(),
+                    uncles: ommers.into_iter().map(|uncle| uncle.into()).collect(),
+                }),
+                true => BlockBody::Merge(BlockBodyMerge {
+                    txs: transactions.into_iter().map(|tx| tx.into()).collect(),
+                }),
+            },
+        }
     }
 }
 

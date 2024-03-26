@@ -1,5 +1,5 @@
 use ethereum_types::{H256, U256};
-use reth_rpc_types::{Block, BlockTransactions};
+use reth_rpc_types::{other::OtherFields, Block, BlockTransactions};
 use tokio::sync::mpsc;
 
 use ethportal_api::{
@@ -62,8 +62,8 @@ impl EthApiServer for EthApi {
             transactions,
             uncles: vec![],
             size: None,
-            total_difficulty: None,
             withdrawals: None,
+            other: OtherFields::default(),
         };
         Ok(block)
     }

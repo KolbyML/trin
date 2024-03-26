@@ -1,4 +1,8 @@
+use alloy_primitives::FixedBytes;
+use alloy_rlp::Encodable as RethEncodable;
+use bytes::BytesMut;
 use ethereum_types::{Bloom, H160, H256, H64, U256, U64};
+use reth_primitives::Header as RethHeader;
 use reth_rpc_types::Header as RpcHeader;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use ruint::Uint;
@@ -281,9 +285,7 @@ impl From<Header> for RpcHeader {
             gas_used: u256_to_uint256(gas_used),
             timestamp: u64_to_uint256(timestamp),
             extra_data: extra_data.into(),
-            mix_hash: mix_hash
-                .map(|mh| mh.to_fixed_bytes().into())
-                .unwrap_or_default(),
+            mix_hash: mix_hash.map(|mh| FixedBytes::from(mh.to_fixed_bytes())),
             // A note on nonce:
             // ethportal-api and reth both use ethereum-types::H64 for nonce. Unfortunately, we use
             // v0.12.1 of ethereum-types, which is different from reth, so the value can't be
@@ -293,12 +295,23 @@ impl From<Header> for RpcHeader {
             nonce: nonce.map(|h64| h64.as_fixed_bytes().into()),
             base_fee_per_gas: base_fee_per_gas.map(u256_to_uint256),
             withdrawals_root: withdrawals_root.map(|root| root.to_fixed_bytes().into()),
-            blob_gas_used,
-            excess_blob_gas,
+            blob_gas_used: blob_gas_used.map(|blob_gas_used| u64_to_uint64(blob_gas_used.as_u64())),
+            excess_blob_gas: excess_blob_gas
+                .map(|excess_blob_gas| u64_to_uint64(excess_blob_gas.as_u64())),
             hash,
             parent_beacon_block_root: parent_beacon_block_root
                 .map(|h264| h264.as_fixed_bytes().into()),
+            total_difficulty: Some(u256_to_uint256(difficulty)),
         }
+    }
+}
+
+impl From<RethHeader> for Header {
+    fn from(header: RethHeader) -> Self {
+        let mut buf = BytesMut::new();
+        header.encode(&mut buf);
+        rlp::decode(&buf)
+            .expect("Both Reth and Portal header RLP formats should match so this shouldn't fail")
     }
 }
 
@@ -312,6 +325,15 @@ fn u64_to_uint256(val: u64) -> Uint<256, 4> {
     let u64_bytes: &[u8] = &val.to_be_bytes();
     let high_zero_bytes: &[u8] = &[0u8; 24];
     let bytes: [u8; 32] = [high_zero_bytes, u64_bytes]
+        .concat()
+        .try_into()
+        .expect("8 bytes + 24 bytes should be 32 bytes");
+    Uint::from_be_bytes(bytes)
+}
+
+fn u64_to_uint64(val: u64) -> Uint<64, 1> {
+    let u64_bytes: &[u8] = &val.to_be_bytes();
+    let bytes: [u8; 8] = [u64_bytes]
         .concat()
         .try_into()
         .expect("8 bytes + 24 bytes should be 32 bytes");

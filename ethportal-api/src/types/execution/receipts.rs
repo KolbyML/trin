@@ -7,6 +7,8 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use eth_trie::{EthTrie, MemoryDB, Trie};
 use ethereum_types::{Address, Bloom, BloomInput, H256, U256};
+use reth_primitives::Receipt as RethReceipt;
+use reth_primitives::ReceiptWithBloom as RethReceiptWithBloom;
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Deserializer};
@@ -259,6 +261,31 @@ impl Into<LegacyReceipt> for LegacyReceiptHelper {
             log_bloom: self.logs_bloom,
             logs,
             outcome: self.outcome,
+        }
+    }
+}
+
+impl From<RethReceiptWithBloom> for LegacyReceipt {
+    fn from(receipt: RethReceiptWithBloom) -> LegacyReceipt {
+        let RethReceiptWithBloom {
+            bloom,
+            receipt:
+                RethReceipt {
+                    cumulative_gas_used,
+                    logs,
+                    tx_type,
+                    success,
+                },
+        } = receipt;
+
+        LegacyReceipt {
+            cumulative_gas_used: cumulative_gas_used.into(),
+            log_bloom: logs.iter().fold(Bloom::default(), |mut b, l| {
+                b.accrue_bloom(&l.bloom());
+                b
+            }),
+            logs,
+            outcome,
         }
     }
 }

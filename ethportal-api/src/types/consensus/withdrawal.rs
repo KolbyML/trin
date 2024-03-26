@@ -1,4 +1,7 @@
+use alloy_rlp::Encodable;
+use bytes::BytesMut;
 use ethereum_types::Address;
+use reth_primitives::Withdrawal as RethWithdrawal;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -12,6 +15,15 @@ pub struct Withdrawal {
     pub address: Address,
     #[serde(deserialize_with = "string_to_u64")]
     pub amount: u64,
+}
+
+impl From<RethWithdrawal> for Withdrawal {
+    fn from(withdrawal: RethWithdrawal) -> Self {
+        let mut buf = BytesMut::new();
+        withdrawal.encode(&mut buf);
+        rlp::decode(&buf)
+            .expect("Both Reth and Portal header RLP formats should match so this shouldn't fail")
+    }
 }
 
 fn string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>

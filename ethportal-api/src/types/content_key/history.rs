@@ -315,7 +315,7 @@ mod test {
         assert_eq!(decoded, key);
 
         assert_eq!(key.to_bytes(), expected_content_key);
-        assert_eq!(key.content_id(), expected_content_id.as_ref());
+        assert_eq!(key.content_id(), expected_content_id.as_ref() as &[u8]);
         assert_eq!(
             key.to_string(),
             "EpochAccumulator { epoch_hash: 0xe242..c491 }"

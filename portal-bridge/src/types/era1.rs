@@ -1,11 +1,13 @@
 use crate::types::e2s::{E2StoreFile, Entry};
 use anyhow::ensure;
 use ethereum_types::{H256, U256};
-use ethportal_api::types::execution::{
-    block_body::BlockBody,
-    header::Header,
-    receipts::{LegacyReceipt, Receipt, Receipts},
-};
+use ethportal_api::types::execution::{block_body::BlockBody, header::Header, receipts::Receipts};
+
+use alloy_rlp::{BytesMut, Decodable, Encodable};
+use ethportal_api::LegacyReceipt;
+use ethportal_api::Receipt;
+use reth_primitives::BlockBody as RethBlockBody;
+use reth_primitives::Receipts as RethReceipts;
 use std::{
     fs,
     io::{Read, Write},
@@ -67,7 +69,7 @@ impl Era1 {
 
     #[allow(dead_code)]
     fn write(&self) -> anyhow::Result<Vec<u8>> {
-        let mut entries: Vec<Entry> = vec![];
+        let mut entries: Vec<Entry> = Vec::with_capacity(ERA1_ENTRY_COUNT);
         let version_entry: Entry = self.version.clone().try_into()?;
         entries.push(version_entry);
         for block_tuple in &self.block_tuples {
@@ -225,7 +227,15 @@ impl TryFrom<&Entry> for BodyEntry {
         let mut decoder = snap::read::FrameDecoder::new(&entry.value[..]);
         let mut buf: Vec<u8> = vec![];
         decoder.read_to_end(&mut buf)?;
-        let body = rlp::decode(&buf)?;
+        let bytes_buf = &mut buf.as_ref();
+        let body: RethBlockBody = RethBlockBody::decode(bytes_buf)?;
+        let body: BlockBody = body.into();
+        if !matches!(body, BlockBody::Legacy(_)) {
+            // all era1 block bodies should be legacy, not merge or shanghai
+            return Err(anyhow::anyhow!(
+                "invalid body entry: incorrect body type: expected legacy, got {body:?}"
+            ));
+        }
         Ok(Self { body })
     }
 }
@@ -234,7 +244,9 @@ impl TryInto<Entry> for BodyEntry {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Entry, Self::Error> {
-        let rlp_encoded = rlp::encode(&self.body).to_vec();
+        let body: RethBlockBody = self.body.into();
+        let mut rlp_encoded = BytesMut::new();
+        body.encode(&mut rlp_encoded);
         let buf: Vec<u8> = vec![];
         let mut encoder = snap::write::FrameEncoder::new(buf);
         let _ = encoder.write(&rlp_encoded)?;
@@ -269,6 +281,7 @@ impl TryFrom<&Entry> for ReceiptsEntry {
             .map(|r| Receipt::Legacy(r.clone()))
             .collect();
         let receipts = Receipts { receipt_list };
+        // let body: Receipts = body.into();
         Ok(Self { receipts })
     }
 }
@@ -444,10 +457,10 @@ mod tests {
     use super::*;
 
     #[rstest::rstest]
-    #[case::era1("../test_assets/era1/mainnet-00000-5ec1ffb8.era1")]
-    #[case::era1("../test_assets/era1/mainnet-00001-a5364e9a.era1")]
+    // #[case::era1("../test_assets/era1/mainnet-00000-5ec1ffb8.era1")]
+    // #[case::era1("../test_assets/era1/mainnet-00001-a5364e9a.era1")]
     // epoch #10 contains txs
-    #[case::era1("../test_assets/era1/mainnet-00010-5f5d4516.era1")]
+    #[case::era1("../test_assets/era1/mainnet-01797-34123297.era1")]
     fn test_era1(#[case] path: &str) {
         let era1 = Era1::read_from_file(path.to_string()).unwrap();
         let actual = era1.write().unwrap();

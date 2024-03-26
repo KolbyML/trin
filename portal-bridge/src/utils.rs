@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::bail;
-use chrono::Duration;
+use chrono::{Duration, TimeDelta};
 use discv5::enr::{CombinedKey, Enr, NodeId};
 use ethereum_types::H256;
 use serde::{Deserialize, Serialize};
@@ -149,7 +149,7 @@ pub fn duration_until_next_update(genesis_time: u64, now: SystemTime) -> Duratio
     let time_to_next_slot = next_slot_timestamp - now;
     let next_update = time_to_next_slot + 4;
 
-    Duration::seconds(next_update as i64)
+    TimeDelta::try_seconds(next_update as i64).expect("TimeDelta should be valid")
 }
 
 pub fn expected_current_slot(genesis_time: u64, now: SystemTime) -> u64 {
@@ -170,7 +170,7 @@ mod tests {
     use crate::constants::{
         BEACON_GENESIS_TIME, HEADER_WITH_PROOF_CONTENT_KEY, HEADER_WITH_PROOF_CONTENT_VALUE,
     };
-    use chrono::{DateTime, TimeZone, Utc};
+    use chrono::{DateTime, TimeDelta, TimeZone, Utc};
     use ethereum_types::U256;
     use ethportal_api::{
         types::distance::{Metric, XorMetric},
@@ -241,7 +241,7 @@ mod tests {
         let date: DateTime<Utc> = Utc.with_ymd_and_hms(2023, 8, 23, 11, 00, seconds).unwrap();
         let now = SystemTime::from(date);
         let duration = duration_until_next_update(BEACON_GENESIS_TIME, now);
-        assert_eq!(duration, Duration::seconds(expected_duration));
+        assert_eq!(duration, TimeDelta::try_seconds(expected_duration).unwrap());
     }
 
     #[rstest]
