@@ -1,5 +1,5 @@
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
-use alloy_rlp::{Decodable, EMPTY_STRING_CODE};
+use alloy_rlp::Decodable;
 use anyhow::{anyhow, bail, ensure, Error};
 use e2store::era1::BlockTuple;
 use eth_trie::{RootWithTrieDiff, Trie};
@@ -20,7 +20,8 @@ use tracing::info;
 
 use crate::{
     block_reward::get_block_reward,
-    spec_id::get_spec_id,
+    dao_fork::{DAO_HARDFORK_BENEFICIARY, DAO_HARDKFORK_ACCOUNTS},
+    spec_id::{get_spec_block_number, get_spec_id},
     storage::{account::Account, evm_db::EvmDB},
     transaction::TxEnvModifier,
 };
@@ -77,12 +78,7 @@ impl State {
             account.balance += alloc_balance.balance;
             self.database.trie.lock().insert(
                 keccak256(address).as_ref(),
-                &alloy_rlp::encode(AccountStateInfo {
-                    nonce: account.nonce,
-                    balance: account.balance,
-                    storage_root: keccak256([EMPTY_STRING_CODE]),
-                    code_hash: account.code_hash,
-                }),
+                &alloy_rlp::encode(AccountStateInfo::from(&account)),
             )?;
             self.database
                 .db
@@ -180,6 +176,61 @@ impl State {
             }
         }
 
+        // check if dao fork, if it is drain accounts and transfer it to beneficiary
+        if block_tuple.header.header.number == get_spec_block_number(SpecId::DAO_FORK) {
+            let mut drained_balance_sum = U256::ZERO;
+
+            // drain dao accounts
+            for address in DAO_HARDKFORK_ACCOUNTS {
+                let address_hash = keccak256(address);
+                let mut account: Account = match self
+                    .database
+                    .db
+                    .get(address_hash)
+                    .expect("Reading account from database should never fail")
+                {
+                    Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
+                    None => Account::default(),
+                };
+
+                drained_balance_sum += account.balance;
+                account.balance = U256::ZERO;
+
+                let _ = self.database.trie.lock().insert(
+                    address_hash.as_ref(),
+                    &alloy_rlp::encode(AccountStateInfo::from(&account)),
+                );
+
+                self.database
+                    .db
+                    .put(address_hash, alloy_rlp::encode(account))?;
+            }
+
+            // transfer drained balance to beneficiary
+            let address_hash = keccak256(DAO_HARDFORK_BENEFICIARY);
+
+            let mut account: Account = match self
+                .database
+                .db
+                .get(address_hash)
+                .expect("Reading account from database should never fail")
+            {
+                Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
+                None => Account::default(),
+            };
+
+            account.balance += drained_balance_sum;
+
+            let _ = self.database.trie.lock().insert(
+                address_hash.as_ref(),
+                &alloy_rlp::encode(AccountStateInfo::from(&account)),
+            );
+
+            self.database
+                .db
+                .put(keccak256(address_hash), alloy_rlp::encode(account))?;
+        }
+
         let RootWithTrieDiff {
             root,
             trie_diff: changed_nodes,
@@ -244,12 +295,7 @@ impl State {
         match account_state {
             Some(account) => {
                 let account: Account = Decodable::decode(&mut account.as_slice())?;
-                Ok(AccountStateInfo {
-                    nonce: account.nonce,
-                    balance: account.balance,
-                    storage_root: account.storage_root,
-                    code_hash: account.code_hash,
-                })
+                Ok(AccountStateInfo::from(&account))
             }
             None => Ok(AccountStateInfo::default()),
         }

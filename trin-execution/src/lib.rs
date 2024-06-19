@@ -1,6 +1,7 @@
 pub mod block_reward;
 pub mod config;
 pub mod content;
+pub mod dao_fork;
 pub mod execution;
 pub mod spec_id;
 pub mod storage;
