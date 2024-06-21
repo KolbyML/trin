@@ -6,6 +6,7 @@ use std::{
 
 use alloy_primitives::B256;
 use anyhow::{anyhow, ensure};
+use e2store::era1::{BlockTuple, Era1};
 use futures::future::join_all;
 use rand::{seq::SliceRandom, thread_rng};
 use scraper::{Html, Selector};
@@ -26,10 +27,7 @@ use crate::{
     },
     gossip::gossip_history_content,
     stats::{HistoryBlockStats, StatsReporter},
-    types::{
-        era1::{BlockTuple, Era1},
-        mode::{BridgeMode, FourFoursMode},
-    },
+    types::mode::{BridgeMode, FourFoursMode},
 };
 use ethportal_api::{
     jsonrpsee::http_client::HttpClient,

@@ -1,0 +1,24 @@
+[package]
+name = "e2store"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/ethereum/trin/tree/master/e2store"
+license = "GPL-3.0"
+readme = "README.md"
+keywords = ["ethereum", "portal-network", "e2store", "era", "era1"]
+categories = ["cryptography::cryptocurrencies"]
+description = "E2store, era, and era1 implementations for Ethereum"
+authors = ["https://github.com/ethereum/trin/graphs/contributors"]
+
+
+[dependencies]
+alloy-primitives = "0.7.0"
+alloy-rlp = "0.3.4"
+anyhow = "1.0.68"
+ethereum_ssz = "0.5.3"
+ethereum_ssz_derive = "0.5.3"
+ethportal-api = { path = "../ethportal-api" }
+snap = "1.1.1"
+
+[dev-dependencies]
+rstest = "0.18.2"
