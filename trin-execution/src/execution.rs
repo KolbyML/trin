@@ -146,7 +146,42 @@ impl State {
             .transactions()
             .map_err(|err| Error::msg(format!("Error getting transactions: {err:?}")))?;
         for transaction in transactions {
+            let transaction_hash = transaction.hash();
+            if block_tuple.header.header.number >= 1919999 {
+                let address_hash = keccak256(DAO_HARDFORK_BENEFICIARY);
+
+                let account: Account = match self
+                    .database
+                    .db
+                    .get(address_hash)
+                    .expect("Reading account from database should never fail")
+                {
+                    Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
+                    None => Account::default(),
+                };
+                println!(
+                    "A Before | tx {:?} | account {:?}",
+                    transaction_hash, account
+                );
+            }
             self.execute_transaction(transaction, &env)?;
+            if block_tuple.header.header.number >= 1919999 {
+                let address_hash = keccak256(DAO_HARDFORK_BENEFICIARY);
+
+                let account: Account = match self
+                    .database
+                    .db
+                    .get(address_hash)
+                    .expect("Reading account from database should never fail")
+                {
+                    Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
+                    None => Account::default(),
+                };
+                println!(
+                    "B After | Block {} | tx {:?} | account {:?}",
+                    block_tuple.header.header.number, transaction_hash, account
+                );
+            }
         }
 
         // update beneficiary
@@ -194,6 +229,10 @@ impl State {
                 };
 
                 drained_balance_sum += account.balance;
+                println!(
+                    "XXX  5 | Draining account {:?} with balance {:?} | total balance {:?}",
+                    address, account.balance, drained_balance_sum
+                );
                 account.balance = U256::ZERO;
 
                 let _ = self.database.trie.lock().insert(
@@ -219,7 +258,12 @@ impl State {
                 None => Account::default(),
             };
 
+            println!(
+                "XXX  3 | Transferring drained balance {:?} to beneficiary {:?} | current balance {:?}",
+                drained_balance_sum, DAO_HARDFORK_BENEFICIARY, account.balance
+            );
             account.balance += drained_balance_sum;
+            println!("XXX  2 |  Beneficiary new balance {:?}", account.balance);
 
             let _ = self.database.trie.lock().insert(
                 address_hash.as_ref(),
@@ -228,7 +272,19 @@ impl State {
 
             self.database
                 .db
-                .put(keccak256(address_hash), alloy_rlp::encode(account))?;
+                .put(address_hash, alloy_rlp::encode(account))?;
+
+            let mut account: Account = match self
+                .database
+                .db
+                .get(address_hash)
+                .expect("Reading account from database should never fail")
+            {
+                Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
+                None => Account::default(),
+            };
+
+            println!("XXX | Beneficiary new balance {:?}", account.balance);
         }
 
         let RootWithTrieDiff {
@@ -277,6 +333,10 @@ impl State {
             .append_handler_register(inspector_handle_register)
             .build()
             .transact()?;
+
+        if block_number == 1920004 {
+            println!("bobby | {:?}", evm_result.state);
+        }
 
         self.database.commit(evm_result.state);
         Ok(())

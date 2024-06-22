@@ -1,5 +1,5 @@
 #[cfg(test)]
-#[cfg(all(test, feature = "comment this line out if you want to run this test"))]
+// #[cfg(all(test, feature = "comment this line out if you want to run this test"))]
 mod tests {
     use anyhow::{anyhow, ensure};
     use e2store::era1::Era1;
