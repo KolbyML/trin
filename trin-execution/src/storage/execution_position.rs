@@ -15,7 +15,7 @@ pub struct ExecutionPosition {
 
     state_root: B256,
 
-    /// The block number we are currently executing
+    /// The next block number to be executed.
     next_block_number: u64,
 }
 

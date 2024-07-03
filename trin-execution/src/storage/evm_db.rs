@@ -381,7 +381,7 @@ impl DatabaseRef for EvmDB {
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
         let _timer = start_timer_vec(&TRANSACTION_PROCESSING_TIMES, &["database_get_storage"]);
         let address_hash = keccak256(address);
-        let account: RocksAccount = match self.db.get(address_hash)? {
+        let account: RocksAccount = match self.db.get(keccak256(address))? {
             Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
             None => return Err(Self::Error::NotFound("storage".to_string())),
         };
