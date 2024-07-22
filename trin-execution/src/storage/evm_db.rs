@@ -142,7 +142,7 @@ impl EvmDB {
                     None => RocksAccount::default(),
                 };
                 if rocks_account.storage_root != keccak256([EMPTY_STRING_CODE]) {
-                    let account_db = AccountDB::new(address, self.db.clone());
+                    let account_db = AccountDB::new(address_hash, self.db.clone());
                     let mut trie = EthTrie::from(Arc::new(account_db), rocks_account.storage_root)?;
                     trie.clear_trie_from_db()?;
                 }
@@ -184,7 +184,7 @@ impl EvmDB {
                 let timer =
                     start_timer_vec(&BUNDLE_COMMIT_PROCESSING_TIMES, &["storage:wipe_storage"]);
 
-                let account_db = AccountDB::new(address, self.db.clone());
+                let account_db = AccountDB::new(address_hash, self.db.clone());
                 let mut rocks_account = rocks_account.expect("We already checked that it is some");
                 if rocks_account.storage_root != keccak256([EMPTY_STRING_CODE]) {
                     let mut trie = EthTrie::from(Arc::new(account_db), rocks_account.storage_root)?;
@@ -205,7 +205,7 @@ impl EvmDB {
                 let timer =
                     start_timer_vec(&BUNDLE_COMMIT_PROCESSING_TIMES, &["storage:apply_updates"]);
 
-                let account_db = AccountDB::new(address, self.db.clone());
+                let account_db = AccountDB::new(address_hash, self.db.clone());
                 let mut rocks_account: RocksAccount = self
                     .db
                     .get(address_hash)?
@@ -375,11 +375,12 @@ impl DatabaseRef for EvmDB {
     #[doc = " Get storage value of address at index."]
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
         let _timer = start_timer_vec(&TRANSACTION_PROCESSING_TIMES, &["database_get_storage"]);
-        let account: RocksAccount = match self.db.get(keccak256(address))? {
+        let address_hash = keccak256(address);
+        let account: RocksAccount = match self.db.get(address_hash)? {
             Some(raw_account) => Decodable::decode(&mut raw_account.as_slice())?,
             None => return Err(Self::Error::NotFound("storage".to_string())),
         };
-        let account_db = AccountDB::new(address, self.db.clone());
+        let account_db = AccountDB::new(address_hash, self.db.clone());
         let trie = if account.storage_root == keccak256([EMPTY_STRING_CODE]) {
             EthTrie::new(Arc::new(account_db))
         } else {

@@ -60,7 +60,7 @@ struct GenesisConfig {
 pub struct State {
     pub database: EvmDB,
     pub config: StateConfig,
-    execution_position: ExecutionPosition,
+    pub execution_position: ExecutionPosition,
     pub era_manager: Arc<Mutex<EraManager>>,
     pub node_data_directory: PathBuf,
 }
@@ -333,6 +333,10 @@ impl State {
         let block_number = evm.context.evm.env.block.number.to::<u64>();
 
         let timer = start_timer_vec(&TRANSACTION_PROCESSING_TIMES, &["modify_tx"]);
+        // info!("senderr {}", sender_address);
+        // info!("tx {:?}", tx);
+        // info!("account {:?}", self.get_account_state(&sender_address));
+
         evm.context.evm.env.tx.caller = sender_address;
         match tx {
             Transaction::Legacy(tx) => tx.modify(block_number, &mut evm.context.evm.env.tx),
