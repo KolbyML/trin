@@ -123,7 +123,7 @@ impl StateValidator {
             StateContentValue::ContractStorageTrieNodeWithProof(value) => {
                 let state_root = self.get_state_root(value.block_hash).await;
                 let account_state =
-                    validate_account_state(state_root, &key.address, &value.account_proof)?;
+                    validate_account_state(state_root, &key.address_hash, &value.account_proof)?;
                 let validation_info = validate_node_trie_proof(
                     Some(account_state.storage_root),
                     key.node_hash,
@@ -147,7 +147,7 @@ impl StateValidator {
 
                 let recursive_gossip_key =
                     StateContentKey::ContractStorageTrieNode(ContractStorageTrieNodeKey {
-                        address: key.address,
+                        address_hash: key.address_hash,
                         path: recursive_gossip_info.path,
                         node_hash: recursive_gossip_info.last_node_hash,
                     });
@@ -197,7 +197,7 @@ impl StateValidator {
 
                 let state_root = self.get_state_root(value.block_hash).await;
                 let account_state =
-                    validate_account_state(state_root, &key.address, &value.account_proof)?;
+                    validate_account_state(state_root, &key.address_hash, &value.account_proof)?;
                 if account_state.code_hash == key.code_hash {
                     Ok(ValidationResult::new(/* valid_for_storing= */ true))
                 } else {
