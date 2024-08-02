@@ -1,4 +1,4 @@
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest as Sha2Digest, Sha256};
 use ssz::{Decode, DecodeError, Encode};
@@ -19,16 +19,16 @@ pub const STATE_CONTRACT_BYTECODE_KEY_PREFIX: u8 = 0x22;
 
 /// A content key in the state overlay network.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum StateContentKey {
+pub enum StateContentKey2 {
     /// A trie node from the state trie.
-    AccountTrieNode(AccountTrieNodeKey),
+    AccountTrieNode(AccountTrieNodeKey2),
     /// A trie node from some account's contract storage.
-    ContractStorageTrieNode(ContractStorageTrieNodeKey),
+    ContractStorageTrieNode(ContractStorageTrieNodeKey2),
     /// An account's contract bytecode.
-    ContractBytecode(ContractBytecodeKey),
+    ContractBytecode(ContractBytecodeKey2),
 }
 
-impl Hash for StateContentKey {
+impl Hash for StateContentKey2 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write(&self.to_bytes());
     }
@@ -36,7 +36,7 @@ impl Hash for StateContentKey {
 
 /// A key for a trie node from the state trie.
 #[derive(Clone, Debug, Decode, Encode, Eq, PartialEq)]
-pub struct AccountTrieNodeKey {
+pub struct AccountTrieNodeKey2 {
     /// Trie path of the node.
     pub path: Nibbles,
     /// Hash of the node.
@@ -45,9 +45,9 @@ pub struct AccountTrieNodeKey {
 
 /// A key for a trie node from some account's contract storage.
 #[derive(Clone, Debug, Decode, Encode, Eq, PartialEq)]
-pub struct ContractStorageTrieNodeKey {
-    /// Address hash of the account.
-    pub address_hash: B256,
+pub struct ContractStorageTrieNodeKey2 {
+    /// Address of the account.
+    pub address: Address,
     /// Trie path of the node.
     pub path: Nibbles,
     /// Hash of the node.
@@ -56,14 +56,14 @@ pub struct ContractStorageTrieNodeKey {
 
 /// A key for an account's contract bytecode.
 #[derive(Clone, Debug, Decode, Encode, Eq, PartialEq)]
-pub struct ContractBytecodeKey {
-    /// Address hash of the account.
-    pub address_hash: B256,
+pub struct ContractBytecodeKey2 {
+    /// Address of the account.
+    pub address: Address,
     /// Hash of the bytecode.
     pub code_hash: B256,
 }
 
-impl OverlayContentKey for StateContentKey {
+impl OverlayContentKey for StateContentKey2 {
     fn content_id(&self) -> [u8; 32] {
         let mut sha256 = Sha256::new();
         sha256.update(self.to_bytes());
@@ -92,19 +92,19 @@ impl OverlayContentKey for StateContentKey {
     }
 }
 
-impl From<&StateContentKey> for Vec<u8> {
-    fn from(val: &StateContentKey) -> Self {
+impl From<&StateContentKey2> for Vec<u8> {
+    fn from(val: &StateContentKey2) -> Self {
         val.to_bytes()
     }
 }
 
-impl From<StateContentKey> for Vec<u8> {
-    fn from(val: StateContentKey) -> Self {
+impl From<StateContentKey2> for Vec<u8> {
+    fn from(val: StateContentKey2) -> Self {
         val.to_bytes()
     }
 }
 
-impl TryFrom<Vec<u8>> for StateContentKey {
+impl TryFrom<Vec<u8>> for StateContentKey2 {
     type Error = ContentKeyError;
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         let Some((&selector, key)) = value.split_first() else {
@@ -117,13 +117,13 @@ impl TryFrom<Vec<u8>> for StateContentKey {
             ));
         };
         match selector {
-            STATE_ACCOUNT_TRIE_NODE_KEY_PREFIX => AccountTrieNodeKey::from_ssz_bytes(key)
+            STATE_ACCOUNT_TRIE_NODE_KEY_PREFIX => AccountTrieNodeKey2::from_ssz_bytes(key)
                 .map(Self::AccountTrieNode)
                 .map_err(|e| ContentKeyError::from_decode_error(e, value)),
-            STATE_STORAGE_TRIE_NODE_KEY_PREFIX => ContractStorageTrieNodeKey::from_ssz_bytes(key)
+            STATE_STORAGE_TRIE_NODE_KEY_PREFIX => ContractStorageTrieNodeKey2::from_ssz_bytes(key)
                 .map(Self::ContractStorageTrieNode)
                 .map_err(|e| ContentKeyError::from_decode_error(e, value)),
-            STATE_CONTRACT_BYTECODE_KEY_PREFIX => ContractBytecodeKey::from_ssz_bytes(key)
+            STATE_CONTRACT_BYTECODE_KEY_PREFIX => ContractBytecodeKey2::from_ssz_bytes(key)
                 .map(Self::ContractBytecode)
                 .map_err(|e| ContentKeyError::from_decode_error(e, value)),
             _ => Err(ContentKeyError::from_decode_error(
@@ -134,7 +134,7 @@ impl TryFrom<Vec<u8>> for StateContentKey {
     }
 }
 
-impl Serialize for StateContentKey {
+impl Serialize for StateContentKey2 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -143,7 +143,7 @@ impl Serialize for StateContentKey {
     }
 }
 
-impl<'de> Deserialize<'de> for StateContentKey {
+impl<'de> Deserialize<'de> for StateContentKey2 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -153,7 +153,7 @@ impl<'de> Deserialize<'de> for StateContentKey {
     }
 }
 
-impl fmt::Display for StateContentKey {
+impl fmt::Display for StateContentKey2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Self::AccountTrieNode(key) => format!(
@@ -163,16 +163,16 @@ impl fmt::Display for StateContentKey {
             ),
             Self::ContractStorageTrieNode(key) => {
                 format!(
-                    "ContractStorageTrieNode {{ address_hash: {}, path: {}, node_hash: {} }}",
-                    hex_encode_compact(key.address_hash),
+                    "ContractStorageTrieNode {{ address: {}, path: {}, node_hash: {} }}",
+                    hex_encode_compact(key.address),
                     &key.path,
                     hex_encode_compact(key.node_hash)
                 )
             }
             Self::ContractBytecode(key) => {
                 format!(
-                    "ContractBytecode {{ address_hash: {}, code_hash: {} }}",
-                    hex_encode_compact(key.address_hash),
+                    "ContractBytecode {{ address: {}, code_hash: {} }}",
+                    hex_encode_compact(key.address),
                     hex_encode_compact(key.code_hash)
                 )
             }
@@ -202,7 +202,7 @@ mod test {
         let yaml = read_yaml_file("account_trie_node_key.yaml")?;
         let yaml = yaml.as_mapping().unwrap();
 
-        let expected_content_key = StateContentKey::AccountTrieNode(AccountTrieNodeKey {
+        let expected_content_key = StateContentKey2::AccountTrieNode(AccountTrieNodeKey2 {
             path: yaml_as_nibbles(&yaml["path"]),
             node_hash: yaml_as_b256(&yaml["node_hash"]),
         });
@@ -216,8 +216,8 @@ mod test {
         let yaml = yaml.as_mapping().unwrap();
 
         let expected_content_key =
-            StateContentKey::ContractStorageTrieNode(ContractStorageTrieNodeKey {
-                address_hash: yaml_as_b256(&yaml["address_hash"]),
+            StateContentKey2::ContractStorageTrieNode(ContractStorageTrieNodeKey2 {
+                address: yaml_as_address(&yaml["address"]),
                 path: yaml_as_nibbles(&yaml["path"]),
                 node_hash: yaml_as_b256(&yaml["node_hash"]),
             });
@@ -230,8 +230,8 @@ mod test {
         let yaml = read_yaml_file("contract_bytecode_key.yaml")?;
         let yaml = yaml.as_mapping().unwrap();
 
-        let expected_content_key = StateContentKey::ContractBytecode(ContractBytecodeKey {
-            address_hash: yaml_as_b256(&yaml["address_hash"]),
+        let expected_content_key = StateContentKey2::ContractBytecode(ContractBytecodeKey2 {
+            address: yaml_as_address(&yaml["address"]),
             code_hash: yaml_as_b256(&yaml["code_hash"]),
         });
 
@@ -241,7 +241,7 @@ mod test {
     #[test]
     fn decode_empty_key_should_fail() {
         assert_eq!(
-            StateContentKey::try_from(vec![]).unwrap_err().to_string(),
+            StateContentKey2::try_from(vec![]).unwrap_err().to_string(),
             "Unable to decode key SSZ bytes 0x due to InvalidLengthPrefix { len: 0, expected: 1 }",
         );
     }
@@ -250,7 +250,7 @@ mod test {
     fn decode_key_with_invalid_selector_should_fail() {
         let invalid_selector_content_key = "0x0024000000c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700005000000";
         assert_eq!(
-            StateContentKey::try_from(hex_decode(invalid_selector_content_key).unwrap())
+            StateContentKey2::try_from(hex_decode(invalid_selector_content_key).unwrap())
                 .unwrap_err()
                 .to_string(),
             format!("Unable to decode key SSZ bytes {invalid_selector_content_key} due to UnionSelectorInvalid(0)"),
@@ -266,7 +266,7 @@ mod test {
         let yaml = yaml.as_mapping().unwrap();
 
         let content_key_bytes = hex_decode(yaml["content_key"].as_str().unwrap())?;
-        let content_key = StateContentKey::try_from(content_key_bytes.clone())?;
+        let content_key = StateContentKey2::try_from(content_key_bytes.clone())?;
 
         assert_eq!(content_key.to_bytes(), content_key_bytes);
         Ok(())
@@ -280,7 +280,7 @@ mod test {
         let yaml = read_yaml_file(filename)?;
         let yaml = yaml.as_mapping().unwrap();
 
-        let content_key = StateContentKey::deserialize(&yaml["content_key"])?;
+        let content_key = StateContentKey2::deserialize(&yaml["content_key"])?;
 
         assert_eq!(
             serde_yaml::to_value(content_key).unwrap(),
@@ -299,7 +299,7 @@ mod test {
         let yaml = yaml.as_mapping().unwrap();
 
         let content_key_bytes = hex_decode(yaml["content_key"].as_str().unwrap())?;
-        let content_key = StateContentKey::try_from(content_key_bytes)?;
+        let content_key = StateContentKey2::try_from(content_key_bytes)?;
         let expected_content_id = yaml_as_b256(&yaml["content_id"]);
 
         assert_eq!(B256::from(content_key.content_id()), expected_content_id);
@@ -310,6 +310,10 @@ mod test {
         let path = PathBuf::from(TEST_DATA_DIRECTORY).join(filename);
         let file = read_file_from_tests_submodule(path)?;
         Ok(serde_yaml::from_str(&file)?)
+    }
+
+    fn yaml_as_address(value: &Value) -> Address {
+        Address::from_str(value.as_str().unwrap()).unwrap()
     }
 
     fn yaml_as_b256(value: &Value) -> B256 {
@@ -330,64 +334,18 @@ mod test {
         Nibbles::try_from_unpacked_nibbles(&nibbles).unwrap()
     }
 
-    fn assert_content_key(value: &Value, expected_content_key: StateContentKey) -> Result<()> {
+    fn assert_content_key(value: &Value, expected_content_key: StateContentKey2) -> Result<()> {
         assert_eq!(
-            StateContentKey::try_from(yaml_as_hex(value))?,
+            StateContentKey2::try_from(yaml_as_hex(value))?,
             expected_content_key,
             "decoding from bytes {value:?} didn't match expected key {expected_content_key:?}"
         );
 
         assert_eq!(
-            StateContentKey::deserialize(value)?,
+            StateContentKey2::deserialize(value)?,
             expected_content_key,
             "deserialization from string {value:?} didn't match expected key {expected_content_key:?}");
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use std::str::FromStr;
-
-    use alloy_primitives::keccak256;
-    use hex::FromHex;
-
-    use crate::{types::content_key::state2::StateContentKey2, utils::bytes::hex_encode};
-
-    use super::*;
-
-    #[test]
-    fn test_create_account_content_key() {
-        let content_key: StateContentKey2 = serde_json::from_value("").unwrap();
-
-        match content_key {
-            StateContentKey2::ContractStorageTrieNode(storage_key) => {
-                let content_key222 =
-                    StateContentKey::ContractStorageTrieNode(ContractStorageTrieNodeKey {
-                        address_hash: keccak256(storage_key.address),
-                        path: storage_key.path,
-                        node_hash: storage_key.node_hash,
-                    });
-                panic!(
-                    "{:?} {:?}",
-                    hex_encode(content_key222.to_bytes()),
-                    hex_encode(content_key222.content_id())
-                );
-            }
-            StateContentKey2::ContractBytecode(contract_key) => {
-                let content_key222 = StateContentKey::ContractBytecode(ContractBytecodeKey {
-                    address_hash: keccak256(contract_key.address),
-                    code_hash: contract_key.code_hash,
-                });
-                panic!(
-                    "{:?} {:?}",
-                    hex_encode(content_key222.to_bytes()),
-                    hex_encode(content_key222.content_id())
-                );
-            }
-            _ => unreachable!("no way"),
-        }
     }
 }
