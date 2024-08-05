@@ -10,7 +10,6 @@ pub struct Entry {
     pub value: Vec<u8>,
 }
 
-#[allow(dead_code)]
 impl Entry {
     pub fn new(type_: u16, value: Vec<u8>) -> Self {
         Self {

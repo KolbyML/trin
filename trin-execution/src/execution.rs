@@ -28,7 +28,10 @@ use tracing::info;
 use crate::{
     block_reward::get_block_reward,
     dao_fork::process_dao_fork,
-    era_manager::{BlockWithRecoveredSenders, EraManager, TransactionsWithSenders},
+    era::{
+        manager::EraManager,
+        types::{BlockWithRecoveredSenders, TransactionsWithSenders},
+    },
     metrics::{
         set_int_gauge_vec, start_timer_vec, stop_timer, BLOCK_HEIGHT, BLOCK_PROCESSING_TIMES,
         TRANSACTION_PROCESSING_TIMES,
