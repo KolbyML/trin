@@ -341,3 +341,84 @@ fn get_beacon_fork(slot_index: u64) -> ForkName {
         ForkName::Deneb
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use surf::Client;
+    use tracing_test::traced_test;
+
+    use crate::{era::Era, utils::get_era_file_download_links};
+
+    #[traced_test]
+    #[tokio::test]
+    async fn test_decode_era() {
+        let http_client = Client::new();
+        let era_files = get_era_file_download_links(&http_client).await.unwrap();
+        assert!(!era_files.is_empty());
+
+        let epoch_index = 600;
+        let era_file = era_files
+            .iter()
+            .find(|file| file.contains(&format!("mainnet-{epoch_index:05}-")))
+            .expect("to be able to find era file")
+            .clone();
+
+        let raw_era1 = http_client.get(&era_file).recv_bytes().await.unwrap();
+        println!("bob {:?}", raw_era1.len());
+        let era = Era::deserialize(&raw_era1).unwrap();
+        println!("egg {:?}", era.blocks.len());
+        let mut last_block_number = era.blocks[0]
+            .block
+            .as_bellatrix()
+            .unwrap()
+            .message
+            .body
+            .execution_payload
+            .block_number
+            - 1;
+        for block in era.blocks {
+            println!(
+                "{:?}",
+                block
+                    .block
+                    .as_bellatrix()
+                    .unwrap()
+                    .message
+                    .body
+                    .execution_payload
+                    .block_number
+            );
+            if last_block_number + 1
+                != block
+                    .block
+                    .as_bellatrix()
+                    .unwrap()
+                    .message
+                    .body
+                    .execution_payload
+                    .block_number
+            {
+                panic!(
+                    "Blocks are not in order {} {}",
+                    last_block_number + 1,
+                    block
+                        .block
+                        .as_bellatrix()
+                        .unwrap()
+                        .message
+                        .body
+                        .execution_payload
+                        .block_number
+                );
+            }
+            last_block_number = block
+                .block
+                .as_bellatrix()
+                .unwrap()
+                .message
+                .body
+                .execution_payload
+                .block_number;
+        }
+    }
+}

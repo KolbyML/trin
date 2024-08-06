@@ -2169,6 +2169,9 @@ dependencies = [
  "scraper",
  "snap",
  "surf",
+ "tokio",
+ "tracing",
+ "tracing-test",
 ]
 
 [[package]]
