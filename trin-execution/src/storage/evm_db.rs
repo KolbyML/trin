@@ -214,9 +214,20 @@ impl DatabaseCommit for EvmDB {
                 .expect("Getting the root hash should never fail");
 
             if self.config.cache_contract_storage_changes {
-                let account_storage_cache = self.storage_cache.entry(address_hash).or_default();
-                for key in trie_diff.keys() {
-                    account_storage_cache.insert(*key);
+                match self.storage_cache.get_mut(&address_hash) {
+                    Some(account_storage_cache) => {
+                        for key in trie_diff.keys() {
+                            account_storage_cache.insert(*key);
+                        }
+                    }
+                    None => {
+                        let mut account_storage_cache = HashSet::new();
+                        for key in trie_diff.keys() {
+                            account_storage_cache.insert(*key);
+                        }
+                        self.storage_cache
+                            .insert(address_hash, account_storage_cache);
+                    }
                 }
             }
 
