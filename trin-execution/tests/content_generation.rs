@@ -11,6 +11,7 @@ use trin_execution::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
+    era::manager::EraManager,
     execution::State,
     storage::utils::setup_temp_dir,
     trie_walker::TrieWalker,
@@ -35,6 +36,8 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
     let blocks = 1_000_000;
 
     let temp_directory = setup_temp_dir()?;
+
+    let mut era_manager = EraManager::new().await?;
 
     let mut state = State::new(
         Some(temp_directory.path().to_path_buf()),
