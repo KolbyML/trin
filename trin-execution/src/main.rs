@@ -5,10 +5,11 @@ use revm_primitives::SpecId;
 use tracing::info;
 use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands},
+    era::manager::EraManager,
     execution::State,
     spec_id::get_spec_block_number,
     storage::utils::setup_temp_dir,
-    subcommands::era2::{StateExporter, StateImporter},
+    subcommands::era2::{StateConverter, StateExporter, StateImporter},
 };
 use trin_utils::log::init_tracing_logger;
 
@@ -55,16 +56,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             TrinExecutionSubCommands::ExportState(export_state) => {
+                let mut era_manager = EraManager::new(state.block_execution_number() - 1).await?;
+                let header = era_manager.get_next_block().await?.clone();
                 let mut state_exporter = StateExporter::new(state, export_state);
-                let header = state_exporter
-                    .state
-                    .era_manager
-                    .lock()
-                    .await
-                    .get_next_block()
-                    .await?
-                    .clone();
                 state_exporter.export_state(header.header)?;
+                return Ok(());
+            }
+            TrinExecutionSubCommands::ConverterState(import_state) => {
+                let mut state_importer = StateConverter::new(state, import_state);
+                state_importer.convert_state()?;
+                info!(
+                    "Imported state from era2: {} {}",
+                    state_importer.state.block_execution_number() - 1,
+                    state_importer.state.get_root()?
+                );
                 return Ok(());
             }
         }

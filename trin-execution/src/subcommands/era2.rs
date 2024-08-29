@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use alloy_rlp::{Decodable, EMPTY_STRING_CODE};
-use anyhow::Error;
-use e2store::era2::{
-    AccountEntry, AccountOrStorageEntry, Era2, StorageEntry, StorageItem, MAX_STORAGE_ITEMS,
+use anyhow::{ensure, Error};
+use e2store::{
+    era2::{
+        AccountEntry, AccountOrStorageEntry, Era2, StorageEntry, StorageItem, MAX_STORAGE_ITEMS,
+    },
+    era2old::{AccountTuple, Era2Old},
 };
 use eth_trie::{
     decode_node,
@@ -16,7 +19,7 @@ use revm_primitives::{keccak256, B256, KECCAK_EMPTY, U256};
 use tracing::info;
 
 use crate::{
-    cli::{ExportState, ImportState},
+    cli::{ConverterState, ExportState, ImportState},
     execution::State,
     storage::{account::Account, account_db::AccountDB},
     utils::full_nibble_path_to_address_hash,
@@ -158,6 +161,10 @@ impl StateExporter {
     }
 
     pub fn export_state(&mut self, header: Header) -> anyhow::Result<()> {
+        ensure!(
+            header.state_root == self.state.get_root()?,
+            "State root mismatch fro block header we are trying to export"
+        );
         info!(
             "Exporting state from block number: {} with state root: {}",
             header.number, header.state_root
@@ -207,7 +214,7 @@ impl StateExporter {
 
             // Get the rounded up storage count
             let storage_count = storage.len() / MAX_STORAGE_ITEMS
-                + (storage.len() % MAX_STORAGE_ITEMS == 0) as usize;
+                + (storage.len() % MAX_STORAGE_ITEMS != 0) as usize;
 
             era2.append_entry(&AccountOrStorageEntry::Account(AccountEntry {
                 address_hash: account_hash,
@@ -217,8 +224,9 @@ impl StateExporter {
             }))?;
 
             for _ in 0..storage_count {
+                let amount_to_drain = std::cmp::min(storage.len(), MAX_STORAGE_ITEMS);
                 era2.append_entry(&AccountOrStorageEntry::Storage(StorageEntry(
-                    storage.drain(..MAX_STORAGE_ITEMS).collect(),
+                    storage.drain(..amount_to_drain).collect(),
                 )))?;
             }
 
@@ -331,6 +339,79 @@ impl StateImporter {
             era2.header.header.number + 1,
             era2.header.header.state_root,
         )?;
+
+        info!("Done importing State from .era2 file");
+
+        Ok(())
+    }
+}
+
+pub struct StateConverter {
+    pub state: State,
+    importer_config: ConverterState,
+}
+
+impl StateConverter {
+    pub fn new(state: State, importer_config: ConverterState) -> Self {
+        Self {
+            state,
+            importer_config,
+        }
+    }
+
+    pub fn convert_state(&mut self) -> anyhow::Result<()> {
+        info!("Importing state from .era2 file");
+        if self.state.block_execution_number() != 0 {
+            return Err(Error::msg(
+                "Cannot import state from .era2, database is not empty",
+            ));
+        }
+
+        let mut era2old = Era2Old::open(&self.importer_config.path_to_era2.clone())?;
+        let mut new_path = self.importer_config.path_to_era2.clone();
+        new_path.pop();
+        let new_path = new_path.join("new");
+        let mut era2 = Era2::create(new_path, era2old.header.header.clone())?;
+
+        info!("Era2 reader initiated");
+        let mut accounts_imported = 0;
+        while let Ok(account_tuple) = era2old.next_account() {
+            let AccountTuple {
+                address_hash,
+                account_state,
+                bytecode,
+                storage,
+            } = account_tuple;
+
+            let address_hash = address_hash.address_hash;
+            let account_state: Account = account_state.account_state.into();
+            let bytecode = bytecode.bytecode;
+            let mut storage: Vec<StorageItem> =
+                storage.storage.into_iter().map(|s| s.into()).collect();
+
+            // Get the rounded up storage count
+            let storage_count = storage.len() / MAX_STORAGE_ITEMS
+                + (storage.len() % MAX_STORAGE_ITEMS != 0) as usize;
+
+            era2.append_entry(&AccountOrStorageEntry::Account(AccountEntry {
+                address_hash,
+                account_state: (&account_state).into(),
+                bytecode,
+                storage_count: storage_count as u32,
+            }))?;
+
+            for _ in 0..storage_count {
+                let amount_to_drain = std::cmp::min(storage.len(), MAX_STORAGE_ITEMS);
+                era2.append_entry(&AccountOrStorageEntry::Storage(StorageEntry(
+                    storage.drain(..amount_to_drain).collect(),
+                )))?;
+            }
+
+            accounts_imported += 1;
+            if accounts_imported % 1000 == 0 {
+                info!("Imported {} accounts", accounts_imported);
+            }
+        }
 
         info!("Done importing State from .era2 file");
 

@@ -1,13 +1,18 @@
 use std::{
+    fs,
     io::{ErrorKind, Read, Write},
     ops::Deref,
     path::{Path, PathBuf},
 };
 
+use crate::era2old::StorageItem as StorageItemOld;
 use alloy_primitives::{hex, B256, U256};
 use alloy_rlp::{Decodable, RlpDecodable, RlpEncodable};
 use anyhow::{bail, ensure};
-use ethportal_api::types::{execution::header::Header, state_trie::account_state::AccountState};
+use ethportal_api::{
+    jsonrpsee::tracing::info,
+    types::{execution::header::Header, state_trie::account_state::AccountState},
+};
 
 use crate::{
     e2store::{
@@ -19,6 +24,15 @@ use crate::{
 };
 
 pub const MAX_STORAGE_ITEMS: usize = 10_000_000;
+
+impl From<StorageItemOld> for StorageItem {
+    fn from(storage_item: StorageItemOld) -> Self {
+        Self {
+            storage_index_hash: storage_item.storage_index_hash,
+            value: storage_item.value,
+        }
+    }
+}
 
 // <network-name>-<block-number>-<short-state-root>.era2
 //
@@ -65,6 +79,8 @@ impl Era2 {
     }
 
     pub fn create(path: PathBuf, header: Header) -> anyhow::Result<Self> {
+        info!("Creating e222ra2 file: {:?}", path);
+        fs::create_dir_all(&path)?;
         ensure!(path.is_dir(), "era2 path is not a directory: {:?}", path);
         let path = path.join(format!(
             "mainnet-{:010}-{}.era2",
@@ -72,6 +88,7 @@ impl Era2 {
             hex::encode(&header.state_root.as_slice()[..4])
         ));
         ensure!(!path.exists(), "era2 file already exists: {:?}", path);
+        info!("Creating era2 file: {:?}", path);
         let mut e2store_stream = E2StoreStream::create(&path)?;
 
         let version = VersionEntry::default();

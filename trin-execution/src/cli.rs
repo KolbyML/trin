@@ -38,10 +38,20 @@ pub enum TrinExecutionSubCommands {
     ImportState(ImportState),
     /// Export the current state of the node to a era2 file
     ExportState(ExportState),
+    ConverterState(ConverterState),
 }
 
 #[derive(Args, Debug, Default, Clone, PartialEq)]
 pub struct ImportState {
+    #[arg(
+        long = "path-to-era2",
+        help = "path to where the era2 state snapshot is located"
+    )]
+    pub path_to_era2: PathBuf,
+}
+
+#[derive(Args, Debug, Default, Clone, PartialEq)]
+pub struct ConverterState {
     #[arg(
         long = "path-to-era2",
         help = "path to where the era2 state snapshot is located"
