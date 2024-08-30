@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut block_number = state.next_block_number();
 
-    let end_block = get_spec_block_number(SpecId::MERGE);
+    let end_block = get_spec_block_number(SpecId::MERGE) - 4;
     while block_number < end_block {
         if rx.try_recv().is_ok() {
             state.database.db.flush()?;
