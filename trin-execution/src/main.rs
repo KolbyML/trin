@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut block_number = trin_execution.next_block_number();
 
-    let end_block = get_spec_block_number(SpecId::MERGE);
+    let end_block = get_spec_block_number(SpecId::SHANGHAI);
     while block_number < end_block {
         if rx.try_recv().is_ok() {
             trin_execution.database.db.flush()?;
@@ -52,7 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
 
-        trin_execution.process_range_of_blocks(end_block).await?;
+        // trin_execution.process_range_of_blocks(end_block).await?;
+        trin_execution.process_next_block().await?;
         block_number = trin_execution.next_block_number();
     }
 

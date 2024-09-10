@@ -1,6 +1,7 @@
 use alloy_primitives::{keccak256, Address, Bytes, B256};
 use alloy_rlp::Decodable;
 use anyhow::{anyhow, bail, ensure};
+use core::panic;
 use eth_trie::{RootWithTrieDiff, Trie};
 use ethportal_api::{types::state_trie::account_state::AccountState as AccountStateInfo, Header};
 use std::{
@@ -87,6 +88,10 @@ impl TrinExecution {
                 .await?
                 .clone();
             stop_timer(timer);
+
+            // if block.header.number == 15537397 {
+            //     panic!("Block number 15537397 is not supported {:?}", block.header);
+            // }
 
             block_executor.execute_block(&block)?;
             last_executed_block_header = Some(block.header);

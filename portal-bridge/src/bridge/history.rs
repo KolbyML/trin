@@ -262,6 +262,13 @@ impl HistoryBridge {
         let timer = metrics.start_process_timer("construct_and_gossip_header");
         let (full_header, header_content_key, header_content_value) =
             execution_api.get_header(height, epoch_acc).await?;
+
+        if full_header.header.number == 15537397 {
+            panic!(
+                "Block number 15537397 is not supported {:?}",
+                full_header.header
+            );
+        }
         let block_stats = Arc::new(Mutex::new(HistoryBlockStats::new(
             full_header.header.number,
         )));

@@ -229,6 +229,7 @@ impl<'a> BlockExecutor<'a> {
         let cumulative_transaction_timer =
             start_timer_vec(&BLOCK_PROCESSING_TIMES, &["cumulative_transaction"]);
         let mut block_gas_used = 0;
+        panic!("Not implemented yet {}", block.transactions.len());
         for transaction in block.transactions.iter() {
             let transaction_timer = start_timer_vec(&BLOCK_PROCESSING_TIMES, &["transaction"]);
             let evm_result = self.execute_transaction(transaction)?;
