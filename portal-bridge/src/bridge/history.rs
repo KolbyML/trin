@@ -403,3 +403,72 @@ impl HistoryBridge {
             .expect("to be able to acquire semaphore")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ethportal_api::types::execution::header_with_proof::HeaderWithProof;
+    use ethportal_api::utils::bytes::hex_encode;
+    use ethportal_api::{ContentValue, HistoryContentKey, HistoryContentValue, OverlayContentKey};
+    use trin_execution::era::manager::EraManager;
+
+    use super::*;
+    use crate::api::execution::construct_proof;
+    use std::io::Write;
+    use std::path::Path;
+    use std::{collections::HashSet, fs::OpenOptions, io};
+
+    fn append_to_file(
+        filename: &str,
+        number: u64,
+        first_string: String,
+        second_string: String,
+    ) -> io::Result<()> {
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true) // Creates the file if it doesn't exist
+            .open(filename)?;
+
+        writeln!(file, "# Header for block number: {}", number)?;
+        writeln!(file, "- {}", first_string)?;
+        writeln!(file, "  {}", second_string)?;
+        writeln!(file, "")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_era_manager() -> anyhow::Result<()> {
+        let mut era_manager = EraManager::new(0).await?;
+        let header_oracle = HeaderOracle::default();
+        let path = PathBuf::from("./../portal-accumulators");
+        let epoch_acc: EpochAccumulator =
+            match lookup_epoch_acc(0, &header_oracle.header_validator.pre_merge_acc, &path).await {
+                Ok(epoch_acc) => epoch_acc,
+                Err(msg) => {
+                    panic!(
+                        "Unable to find epoch acc for gossip range: 0. Skipping iteration: {msg:?}"
+                    );
+                }
+            };
+        for _ in 0..65 {
+            let block = era_manager.get_next_block().await?;
+            let content_key = HistoryContentKey::new_block_header_by_hash(block.header.hash());
+            let first_string = hex_encode(&content_key.to_bytes());
+
+            let header_with_proof = construct_proof(block.header.clone(), &epoch_acc).await?;
+            // Double check that the proof is valid
+            header_oracle
+                .header_validator
+                .validate_header_with_proof(&header_with_proof)?;
+            let content_value = HistoryContentValue::BlockHeaderWithProof(header_with_proof);
+            let second_string = hex_encode(&content_value.encode());
+            append_to_file(
+                "testdata.txt",
+                block.header.number,
+                first_string,
+                second_string,
+            )?
+        }
+
+        Ok(())
+    }
+}
