@@ -2,12 +2,11 @@ use clap::Parser;
 use tracing::info;
 use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands, APP_NAME},
-    execution::TrinExecution,
+    engine::{service::EngineService, utils::initialize_database},
+    rpc::engine::EngineAuthServer,
     subcommands::era2::{export::StateExporter, import::StateImporter},
 };
 use trin_utils::{dir::setup_data_dir, log::init_tracing_logger};
-
-const LATEST_BLOCK: u64 = 20_868_946;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,19 +49,38 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut trin_execution =
-        TrinExecution::new(&data_dir, trin_execution_config.clone().into()).await?;
+    let (shutdown_signal_sender, _) = tokio::sync::broadcast::channel(1);
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (execution_position, evm_db) =
+        initialize_database(&data_dir, trin_execution_config.clone().into()).await?;
+    let engine_tx = EngineService::spawn(
+        &data_dir,
+        execution_position.clone(),
+        evm_db,
+        shutdown_signal_sender.clone(),
+    )
+    .await;
+
+    let engine_api_rpc_handle = EngineAuthServer::start(
+        engine_tx,
+        execution_position,
+        &data_dir,
+        trin_execution_config.clone(),
+    )
+    .await?;
+
+    // let last_block = trin_execution_config.last_block.unwrap_or(LATEST_BLOCK);
+    // trin_execution
+    //     .process_range_of_blocks(last_block, Some(rx))
+    //     .await?;
+
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
-        tx.send(()).expect("signal ctrl_c should never fail");
+        let _ = engine_api_rpc_handle.stop();
+        shutdown_signal_sender
+            .send(())
+            .expect("signal ctrl_c should never fail");
     });
-
-    let last_block = trin_execution_config.last_block.unwrap_or(LATEST_BLOCK);
-    trin_execution
-        .process_range_of_blocks(last_block, Some(rx))
-        .await?;
 
     Ok(())
 }

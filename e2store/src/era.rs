@@ -112,7 +112,7 @@ impl Era {
             }))
     }
 
-    fn get_block_slot_indexes(
+    pub fn get_block_slot_indexes(
         file_length: usize,
         slot_index_block_entry: &SlotIndexBlockEntry,
     ) -> Vec<u64> {

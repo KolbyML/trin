@@ -18,14 +18,17 @@ alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 alloy-rpc-types = { workspace = true, features = ["engine"]}
 anyhow.workspace = true
+async-trait.workspace = true
 clap.workspace = true
 ethportal-api.workspace = true
 e2store.workspace = true
 eth_trie.workspace = true
 hashbrown = "0.14.0"
-jsonrpsee = { workspace = true, features = ["async-client", "client", "macros", "server"]}
+http.workspace = true
+jsonrpsee = { workspace = true, features = ["async-client", "client", "macros", "server", "server-core"]}
 lazy_static.workspace = true
 parking_lot.workspace = true
+pin-project = "1.1.6"
 prometheus_exporter.workspace = true
 rayon = "1.10.0"
 reqwest.workspace = true
@@ -37,6 +40,8 @@ serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 trin-evm.workspace = true
 trin-utils.workspace = true

@@ -1,10 +1,14 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
+};
 
 use clap::{Args, Parser, Subcommand};
 
 use crate::types::block_to_trace::BlockToTrace;
 
 pub const APP_NAME: &str = "trin-execution";
+const DEFAULT_RPC_AUTHENTICATION_PORT: u16 = 8551;
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "Trin Execution", about = "Executing blocks with no devp2p")]
@@ -40,6 +44,26 @@ pub struct TrinExecutionConfig {
         help = "Enable prometheus metrics reporting (provide local IP/Port from which your Prometheus server is configured to fetch metrics)"
     )]
     pub enable_metrics_with_url: Option<SocketAddr>,
+
+    #[arg(
+        long = "authrpc.addr",
+        help = "Address used for authentication for the engine api RPC server",
+        default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST)
+    )]
+    pub rpc_authentication_address: IpAddr,
+
+    #[arg(
+        long = "authrpc.port",
+        help = "Port used for authentication for the engine api RPC server",
+        default_value_t = DEFAULT_RPC_AUTHENTICATION_PORT
+    )]
+    pub rpc_authentication_port: u16,
+
+    #[arg(
+        long = "authrpc.jwtsecret",
+        help = "Location of the jwt secret file used for authentication for the engine api RPC server. Defaults to the data directory."
+    )]
+    pub rpc_authentication_jwt_secret_path: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: Option<TrinExecutionSubCommands>,

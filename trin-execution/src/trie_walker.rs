@@ -165,12 +165,12 @@ mod tests {
     use eth_trie::{RootWithTrieDiff, Trie};
     use trin_utils::dir::create_temp_test_dir;
 
-    use crate::{config::StateConfig, execution::TrinExecution, trie_walker::TrieWalker};
+    use crate::{config::StateConfig, sync::syncer::Syncer, trie_walker::TrieWalker};
 
     #[tokio::test]
     async fn test_trie_walker_builds_valid_proof() {
         let temp_directory = create_temp_test_dir().unwrap();
-        let mut trin_execution = TrinExecution::new(temp_directory.path(), StateConfig::default())
+        let mut trin_execution = Syncer::new(temp_directory.path(), StateConfig::default())
             .await
             .unwrap();
         let RootWithTrieDiff { trie_diff, .. } = trin_execution.process_next_block().await.unwrap();

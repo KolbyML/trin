@@ -25,7 +25,7 @@ use trin_execution::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
-    execution::TrinExecution,
+    sync::syncer::Syncer,
     trie_walker::TrieWalker,
     types::{block_to_trace::BlockToTrace, trie_proof::TrieProof},
     utils::full_nibble_path_to_address_hash,
@@ -107,7 +107,7 @@ impl StateBridge {
             cache_contract_storage_changes: true,
             block_to_trace: BlockToTrace::None,
         };
-        let mut trin_execution = TrinExecution::new(temp_directory.path(), state_config).await?;
+        let mut trin_execution = Syncer::new(temp_directory.path(), state_config).await?;
 
         if start_block > 0 {
             info!("Executing up to block: {}", start_block - 1);
@@ -149,7 +149,7 @@ impl StateBridge {
     async fn gossip_trie_diff(
         &self,
         root_with_trie_diff: RootWithTrieDiff,
-        trin_execution: &mut TrinExecution,
+        trin_execution: &mut Syncer,
     ) -> anyhow::Result<()> {
         let block_hash = trin_execution
             .era_manager

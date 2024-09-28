@@ -23,7 +23,7 @@ use revm_primitives::{AccountInfo, Bytecode, KECCAK_EMPTY};
 use rocksdb::DB as RocksDB;
 use tracing::info;
 
-use super::{account_db::AccountDB, execution_position::ExecutionPosition, trie_db::TrieRocksDB};
+use super::{account_db::AccountDB, trie_db::TrieRocksDB};
 
 fn start_commit_timer(name: &str) -> HistogramTimer {
     start_timer_vec(&BUNDLE_COMMIT_PROCESSING_TIMES, &[name])
@@ -46,24 +46,15 @@ pub struct EvmDB {
 }
 
 impl EvmDB {
-    pub fn new(
-        config: StateConfig,
-        db: Arc<RocksDB>,
-        execution_position: &ExecutionPosition,
-    ) -> anyhow::Result<Self> {
+    pub fn new(config: StateConfig, db: Arc<RocksDB>, state_root: B256) -> anyhow::Result<Self> {
         db.put(KECCAK_EMPTY, Bytecode::new().bytes().as_ref())?;
         db.put(B256::ZERO, Bytecode::new().bytes().as_ref())?;
 
-        let trie = Arc::new(Mutex::new(
-            if execution_position.state_root() == EMPTY_ROOT_HASH {
-                EthTrie::new(Arc::new(TrieRocksDB::new(false, db.clone())))
-            } else {
-                EthTrie::from(
-                    Arc::new(TrieRocksDB::new(false, db.clone())),
-                    execution_position.state_root(),
-                )?
-            },
-        ));
+        let trie = Arc::new(Mutex::new(if state_root == EMPTY_ROOT_HASH {
+            EthTrie::new(Arc::new(TrieRocksDB::new(false, db.clone())))
+        } else {
+            EthTrie::from(Arc::new(TrieRocksDB::new(false, db.clone())), state_root)?
+        }));
 
         let storage_cache = Arc::new(Mutex::new(FbHashMap::default()));
         Ok(Self {

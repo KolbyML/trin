@@ -1,13 +1,14 @@
+pub mod blockchain;
 pub mod cli;
 pub mod config;
 pub mod content;
 pub mod engine;
-pub mod era;
 pub mod evm;
-pub mod execution;
 pub mod metrics;
+pub mod rpc;
 pub mod storage;
 pub mod subcommands;
+pub mod sync;
 pub mod trie_walker;
 pub mod types;
 pub mod utils;
