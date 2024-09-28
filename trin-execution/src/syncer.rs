@@ -1,12 +1,14 @@
-use alloy_primitives::B256;
-use anyhow::ensure;
-use eth_trie::{RootWithTrieDiff, Trie};
-use ethportal_api::{types::execution::transaction::Transaction, Header};
-use revm::inspectors::TracerEip3155;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use alloy_primitives::B256;
+use anyhow::ensure;
+use eth_trie::{RootWithTrieDiff, Trie};
+use ethportal_api::{types::execution::transaction::Transaction, Header};
+use parking_lot::Mutex as ParkingMutex;
+use revm::inspectors::TracerEip3155;
 use tokio::sync::{oneshot::Receiver, Mutex};
 use tracing::{info, warn};
 
@@ -14,29 +16,31 @@ use crate::{
     era::manager::EraManager,
     evm::block_executor::BlockExecutor,
     metrics::{start_timer_vec, stop_timer, BLOCK_PROCESSING_TIMES},
-    storage::{evm_db::EvmDB, execution_position::ExecutionPosition, utils::setup_rocksdb},
+    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV1, utils::setup_rocksdb},
 };
 
 use super::config::StateConfig;
 
-pub struct TrinExecution {
+pub struct Syncer {
     pub database: EvmDB,
     pub config: StateConfig,
-    pub execution_position: ExecutionPosition,
+    pub execution_position: Arc<ParkingMutex<ExecutionPositionV1>>,
     pub era_manager: Arc<Mutex<EraManager>>,
     pub data_directory: PathBuf,
 }
 
-impl TrinExecution {
+impl Syncer {
     pub async fn new(data_dir: &Path, config: StateConfig) -> anyhow::Result<Self> {
         let db = Arc::new(setup_rocksdb(data_dir)?);
-        let execution_position = ExecutionPosition::initialize_from_db(db.clone())?;
+        let execution_position = Arc::new(ParkingMutex::new(
+            ExecutionPositionV1::initialize_from_db(db.clone())?,
+        ));
 
-        let database = EvmDB::new(config.clone(), db, &execution_position)
+        let database = EvmDB::new(config.clone(), db, execution_position.clone())
             .expect("Failed to create EVM database");
 
         let era_manager = Arc::new(Mutex::new(
-            EraManager::new(execution_position.next_block_number()).await?,
+            EraManager::new(execution_position.lock().next_block_number()).await?,
         ));
 
         Ok(Self {
@@ -49,7 +53,7 @@ impl TrinExecution {
     }
 
     pub fn next_block_number(&self) -> u64 {
-        self.execution_position.next_block_number()
+        self.execution_position.lock().next_block_number()
     }
 
     pub async fn process_next_block(&mut self) -> anyhow::Result<RootWithTrieDiff> {
@@ -60,13 +64,13 @@ impl TrinExecution {
     /// Processes blocks up to last block number (inclusive) and returns the root with trie diff.
     ///
     /// If the state cache gets too big, we will commit the state and continue. Execution can be
-    /// interupted early by sending `stop_signal`, in which case we will commit and return.
+    /// interrupted early by sending `stop_signal`, in which case we will commit and return.
     pub async fn process_range_of_blocks(
         &mut self,
         last_block: u64,
         mut stop_signal: Option<Receiver<()>>,
     ) -> anyhow::Result<RootWithTrieDiff> {
-        let start_block = self.execution_position.next_block_number();
+        let start_block = self.execution_position.lock().next_block_number();
         ensure!(
             last_block >= start_block,
             "Last block number {last_block} is less than start block number {start_block}",
@@ -142,6 +146,7 @@ impl TrinExecution {
         let update_execution_position_timer =
             start_timer_vec(&BLOCK_PROCESSING_TIMES, &["set_block_execution_number"]);
         self.execution_position
+            .lock()
             .update_position(self.database.db.clone(), header)?;
         stop_timer(update_execution_position_timer);
 
@@ -173,7 +178,7 @@ mod tests {
     #[tokio::test]
     async fn test_we_generate_the_correct_state_root_for_the_first_8192_blocks() {
         let temp_directory = create_temp_test_dir().unwrap();
-        let mut trin_execution = TrinExecution::new(temp_directory.path(), StateConfig::default())
+        let mut trin_execution = Syncer::new(temp_directory.path(), StateConfig::default())
             .await
             .unwrap();
         let raw_era1 = fs::read("../test_assets/era1/mainnet-00000-5ec1ffb8.era1").unwrap();

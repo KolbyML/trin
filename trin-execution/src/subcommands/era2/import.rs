@@ -12,10 +12,7 @@ use crate::{
     config::StateConfig,
     era::manager::EraManager,
     evm::block_executor::BLOCKHASH_SERVE_WINDOW,
-    storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPosition,
-        utils::setup_rocksdb,
-    },
+    storage::{account_db::AccountDB, evm_db::EvmDB, utils::setup_rocksdb},
 };
 
 pub struct StateImporter {

@@ -4,6 +4,7 @@ use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands, APP_NAME},
     execution::TrinExecution,
     subcommands::era2::{export::StateExporter, import::StateImporter},
+    syncer::Syncer,
 };
 use trin_utils::{dir::setup_data_dir, log::init_tracing_logger};
 

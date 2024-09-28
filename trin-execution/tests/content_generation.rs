@@ -18,7 +18,7 @@ use trin_execution::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
-    execution::TrinExecution,
+    syncer::Syncer,
     trie_walker::TrieWalker,
     types::block_to_trace::BlockToTrace,
     utils::full_nibble_path_to_address_hash,
@@ -117,7 +117,7 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
     let blocks = std::env::var("BLOCKS")?.parse::<u64>()?;
 
     let temp_directory = create_temp_test_dir()?;
-    let mut trin_execution = TrinExecution::new(
+    let mut trin_execution = Syncer::new(
         temp_directory.path(),
         StateConfig {
             cache_contract_storage_changes: true,

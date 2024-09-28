@@ -13,7 +13,7 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 use crate::era::{
-    beacon::ProcessBeaconBlock,
+    execution_payload::ProcessExecutionPayload,
     types::{EraType, ProcessedBlock, TransactionsWithSender},
 };
 
@@ -70,7 +70,7 @@ pub fn process_era_file(raw_era: Vec<u8>, epoch_index: u64) -> anyhow::Result<Pr
         // because the merge didn't occur yet the execution_payloads were empty. Hence we skip those
         // blocks.
         .filter(|block| block.execution_block_number() != 0)
-        .map(|block| block.process_beacon_block())
+        .map(|block| block.process_execution_payload())
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     info!("Done processing era file {epoch_index}");

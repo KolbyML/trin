@@ -78,7 +78,7 @@ members = [
 
 [workspace.dependencies]
 alloy-consensus = "0.3.6"
-alloy-primitives = "0.8.3" 
+alloy-primitives = "0.8.5" 
 alloy-rlp = "0.3.8"
 alloy-rpc-types = "0.3.6"
 anyhow = "1.0.68"

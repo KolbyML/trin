@@ -23,7 +23,7 @@ use revm_primitives::{keccak256, AccountInfo, Bytecode, HashMap, KECCAK_EMPTY};
 use rocksdb::DB as RocksDB;
 use tracing::info;
 
-use super::{account_db::AccountDB, execution_position::ExecutionPosition, trie_db::TrieRocksDB};
+use super::{account_db::AccountDB, execution_position::ExecutionPositionV1, trie_db::TrieRocksDB};
 
 fn start_commit_timer(name: &str) -> HistogramTimer {
     start_timer_vec(&BUNDLE_COMMIT_PROCESSING_TIMES, &[name])
@@ -49,18 +49,18 @@ impl EvmDB {
     pub fn new(
         config: StateConfig,
         db: Arc<RocksDB>,
-        execution_position: &ExecutionPosition,
+        execution_position: Arc<Mutex<ExecutionPositionV1>>,
     ) -> anyhow::Result<Self> {
         db.put(KECCAK_EMPTY, Bytecode::new().bytes().as_ref())?;
         db.put(B256::ZERO, Bytecode::new().bytes().as_ref())?;
 
         let trie = Arc::new(Mutex::new(
-            if execution_position.state_root() == EMPTY_ROOT_HASH {
+            if execution_position.lock().state_root() == EMPTY_ROOT_HASH {
                 EthTrie::new(Arc::new(TrieRocksDB::new(false, db.clone())))
             } else {
                 EthTrie::from(
                     Arc::new(TrieRocksDB::new(false, db.clone())),
-                    execution_position.state_root(),
+                    execution_position.lock().state_root(),
                 )?
             },
         ));

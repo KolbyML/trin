@@ -19,10 +19,7 @@ use crate::{
     cli::ExportStateConfig,
     config::StateConfig,
     era::manager::EraManager,
-    storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPosition,
-        utils::setup_rocksdb,
-    },
+    storage::{account_db::AccountDB, evm_db::EvmDB, utils::setup_rocksdb},
 };
 
 pub struct StateExporter {

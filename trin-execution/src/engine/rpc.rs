@@ -1,13 +1,37 @@
-use alloy_rlp::Bytes;
-use alloy_rpc_types::{Block, BlockId, Filter, Log, SyncStatus, TransactionRequest};
-use alloy_rpc_types_engine::{
-    ExecutionPayloadBodiesV1, ExecutionPayloadBodiesV2, ExecutionPayloadInputV2,
-    ExecutionPayloadV1, ExecutionPayloadV2, ExecutionPayloadV3, ExecutionPayloadV4,
-    ForkchoiceState, ForkchoiceUpdated, PayloadAttributes, PayloadId, PayloadStatus,
-    TransitionConfiguration,
+use std::{
+    os::unix::process,
+    sync::{mpsc, Arc},
 };
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use revm_primitives::{Address, B256, U256};
+
+use alloy_rlp::Bytes;
+use alloy_rpc_types::{Block, BlockId, Filter, Log, SyncInfo, SyncStatus, TransactionRequest};
+use alloy_rpc_types_engine::{
+    ClientCode, ClientVersionV1, ExecutionPayload, ExecutionPayloadBodiesV1,
+    ExecutionPayloadBodiesV2, ExecutionPayloadInputV2, ExecutionPayloadV1, ExecutionPayloadV2,
+    ExecutionPayloadV3, ExecutionPayloadV4, ForkchoiceState, ForkchoiceUpdated, PayloadAttributes,
+    PayloadId, PayloadStatus, PayloadStatusEnum, TransitionConfiguration,
+};
+use async_trait::async_trait;
+use ethportal_api::{types::execution, utils::bytes::hex_encode};
+use jsonrpsee::{
+    core::RpcResult,
+    proc_macros::rpc,
+    types::{ErrorObject, ErrorObjectOwned},
+};
+use parking_lot::Mutex;
+use revm::db::components::block_hash;
+use revm_primitives::{bitvec::view::BitViewSized, Address, B256, U256};
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedSender},
+    oneshot,
+};
+
+use crate::{
+    era::execution_payload::ProcessExecutionPayload,
+    storage::execution_position::ExecutionPositionV1,
+};
+
+use super::{command::EngineCommand, error::EngineApiError};
 
 /// Engine Api JSON-RPC endpoints
 #[rpc(client, server, namespace = "engine")]
@@ -18,11 +42,11 @@ pub trait EngineApi {
         supported_capabilities: Vec<String>,
     ) -> RpcResult<Vec<String>>;
 
-    #[method(name = "exchangeTransitionConfigurationV1")]
-    async fn exchange_transition_configuration_v1(
+    #[method(name = "getClientVersionV1")]
+    async fn get_client_version_v1(
         &self,
-        transition_configuration: TransitionConfiguration,
-    ) -> RpcResult<TransitionConfiguration>;
+        client_version: ClientVersionV1,
+    ) -> RpcResult<Vec<ClientVersionV1>>;
 
     #[method(name = "forkchoiceUpdatedV1")]
     async fn fork_choice_updated_v1(
@@ -143,4 +167,360 @@ pub trait EngineEthApi {
 
     #[method(name = "syncing")]
     async fn syncing(&self) -> RpcResult<SyncStatus>;
+}
+
+const CAPABILITIES: [&str; 16] = [
+    "engine_getClientVersionV1",
+    "engine_forkchoiceUpdatedV1",
+    "engine_forkchoiceUpdatedV2",
+    "engine_forkchoiceUpdatedV3",
+    "engine_getPayloadBodiesByHashV1",
+    "engine_getPayloadBodiesByHashV2",
+    "engine_getPayloadBodiesByRangeV1",
+    "engine_getPayloadBodiesByRangeV2",
+    "engine_getPayloadV1",
+    "engine_getPayloadV2",
+    "engine_getPayloadV3",
+    "engine_getPayloadV4",
+    "engine_newPayloadV1",
+    "engine_newPayloadV2",
+    "engine_newPayloadV3",
+    "engine_newPayloadV4",
+];
+
+struct EngineRPCServer {
+    consensus_capabilities: Arc<Mutex<Vec<String>>>,
+    execution_position: Arc<Mutex<ExecutionPositionV1>>,
+    engine_tx: UnboundedSender<EngineCommand>,
+}
+
+#[async_trait]
+impl EngineApiServer for EngineRPCServer {
+    async fn exchange_capabilities(
+        &self,
+        supported_capabilities: Vec<String>,
+    ) -> RpcResult<Vec<String>> {
+        *self.consensus_capabilities.lock() = supported_capabilities;
+        let capabilities: Vec<String> = CAPABILITIES
+            .into_iter()
+            .map(|method| method.to_string())
+            .collect();
+        Ok(capabilities)
+    }
+
+    async fn get_client_version_v1(
+        &self,
+        _client_version: ClientVersionV1,
+    ) -> RpcResult<Vec<ClientVersionV1>> {
+        Ok(vec![ClientVersionV1 {
+            code: ClientCode::TE,
+            name: "Trin Execution".to_string(),
+            version: "todo!".to_string(),
+            commit: "todo!".to_string(),
+        }])
+    }
+
+    async fn fork_choice_updated_v1(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
+    ) -> RpcResult<ForkchoiceUpdated> {
+        // if payload_attributes is present, throw an error as we don't support block building right
+        // now
+        if payload_attributes.is_some() {
+            return Err(EngineApiError::ServerError(
+                "Trin Execution doesn't support block building for the time being.".to_string(),
+            )
+            .into());
+        }
+
+        let (command_tx, command_rx) = oneshot::channel();
+
+        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+
+        self.engine_tx.send(command).map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to send EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
+
+        let result = command_rx.await.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to receive ForkchoiceUpdated result: {err:?}"
+            ))
+        })?;
+
+        let result = result.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to process EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
+
+        Ok(result)
+    }
+
+    async fn fork_choice_updated_v2(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
+    ) -> RpcResult<ForkchoiceUpdated> {
+        todo!()
+    }
+
+    async fn fork_choice_updated_v3(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
+    ) -> RpcResult<ForkchoiceUpdated> {
+        todo!()
+    }
+
+    async fn get_payload_bodies_by_hash_v1(
+        &self,
+        _block_hashes: Vec<B256>,
+    ) -> RpcResult<ExecutionPayloadBodiesV1> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_bodies_by_hash_v2(
+        &self,
+        _block_hashes: Vec<B256>,
+    ) -> RpcResult<ExecutionPayloadBodiesV2> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_bodies_by_range_v1(
+        &self,
+        _start: u64,
+        _count: u64,
+    ) -> RpcResult<ExecutionPayloadBodiesV1> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_bodies_by_range_v2(
+        &self,
+        _start: u64,
+        _count: u64,
+    ) -> RpcResult<ExecutionPayloadBodiesV2> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_v1(&self, _payload_id: PayloadId) -> RpcResult<ExecutionPayloadV1> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_v2(&self, _payload_id: PayloadId) -> RpcResult<ExecutionPayloadV2> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_v3(&self, _payload_id: PayloadId) -> RpcResult<ExecutionPayloadV3> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn get_payload_v4(&self, _payload_id: PayloadId) -> RpcResult<ExecutionPayloadV4> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support block building for the time being.".to_string(),
+        )
+        .into())
+    }
+
+    async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
+        let block_hash = payload.block_hash;
+        let processed_block = payload.process_execution_payload().map_err(|err| {
+            EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
+        })?;
+
+        if block_hash != processed_block.header.hash() {
+            return Err(EngineApiError::ServerError(format!(
+                "Block hash mismatch: expected {block_hash} but got {}",
+                processed_block.header.hash()
+            ))
+            .into());
+        }
+
+        let (command_tx, command_rx) = oneshot::channel();
+
+        let command = EngineCommand::NewPayload((processed_block, command_tx));
+
+        self.engine_tx.send(command).map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to send EngineCommand::NewPayload: {err:?}"
+            ))
+        })?;
+
+        let result = command_rx.await.map_err(|err| {
+            EngineApiError::ServerError(format!("Failed to receive PayloadStatus result: {err:?}"))
+        })?;
+
+        let payload_status = result.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to process EngineCommand::NewPayload: {err:?}"
+            ))
+        })?;
+
+        Ok(payload_status)
+    }
+
+    async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
+        let block_hash = payload.execution_payload.block_hash;
+        let processed_block = payload.process_execution_payload().map_err(|err| {
+            EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
+        })?;
+
+        if block_hash != processed_block.header.hash() {
+            return Err(EngineApiError::ServerError(format!(
+                "Block hash mismatch: expected {block_hash} but got {}",
+                processed_block.header.hash()
+            ))
+            .into());
+        }
+
+        // todo: handle if data to validate payload is present.
+
+        Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing))
+    }
+
+    async fn new_payload_v3(
+        &self,
+        payload: ExecutionPayloadV3,
+        _versioned_hashes: Vec<B256>,
+        _parent_beacon_block_root: B256,
+    ) -> RpcResult<PayloadStatus> {
+        let block_hash = payload.payload_inner.payload_inner.block_hash;
+        let processed_block = payload.process_execution_payload().map_err(|err| {
+            EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
+        })?;
+
+        if block_hash != processed_block.header.hash() {
+            return Err(EngineApiError::ServerError(format!(
+                "Block hash mismatch: expected {block_hash} but got {}",
+                processed_block.header.hash()
+            ))
+            .into());
+        }
+
+        // todo: handle if data to validate payload is present.
+
+        Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing))
+    }
+
+    async fn new_payload_v4(
+        &self,
+        _payload: ExecutionPayloadV4,
+        _versioned_hashes: Vec<B256>,
+        _parent_beacon_block_root: B256,
+    ) -> RpcResult<PayloadStatus> {
+        Err(EngineApiError::ServerError(
+            "Trin Execution doesn't support Pectra for the time being".to_string(),
+        )
+        .into())
+    }
+}
+
+impl EngineRPCServer {
+    pub fn new(
+        consensus_capabilities: Arc<Mutex<Vec<String>>>,
+        execution_position: Arc<Mutex<ExecutionPositionV1>>,
+        engine_tx: UnboundedSender<EngineCommand>,
+    ) -> Self {
+        Self {
+            consensus_capabilities,
+            execution_position,
+            engine_tx,
+        }
+    }
+}
+
+struct EngineEthRPCServer {
+    execution_position: Arc<Mutex<ExecutionPositionV1>>,
+}
+
+#[async_trait]
+impl EngineEthApiServer for EngineEthRPCServer {
+    async fn block_number(&self) -> RpcResult<String> {
+        Ok(format!(
+            "{:X}",
+            self.execution_position.lock().latest_block_number()
+        ))
+    }
+
+    async fn call(&self, transaction: TransactionRequest, block: BlockId) -> RpcResult<Bytes> {
+        todo!()
+    }
+
+    async fn chain_id(&self) -> RpcResult<U256> {
+        Ok(U256::from(1))
+    }
+
+    async fn get_block_by_hash(
+        &self,
+        block_hash: B256,
+        hydrated_transactions: bool,
+    ) -> RpcResult<Block> {
+        todo!()
+    }
+
+    async fn get_block_by_number(
+        &self,
+        _block_number: u64,
+        _hydrated_transactions: bool,
+    ) -> RpcResult<Block> {
+        todo!()
+    }
+
+    async fn get_code(&self, _address: Address, _block: BlockId) -> RpcResult<Bytes> {
+        todo!()
+    }
+
+    async fn get_logs(&self, _filter: Filter) -> RpcResult<Vec<Log>> {
+        todo!()
+    }
+
+    async fn send_raw_transaction(&self, _bytes: Bytes) -> RpcResult<B256> {
+        Err(ErrorObject::owned(
+            -333333,
+            "send_raw_transaction is not implemented: depends on Portal Transaction Gossip Network",
+            None::<()>,
+        ))
+    }
+
+    async fn syncing(&self) -> RpcResult<SyncStatus> {
+        let execution_position = self.execution_position.lock().clone();
+
+        let current_block = execution_position.next_block_number().saturating_sub(1);
+
+        if current_block == execution_position.latest_block_number() {
+            return Ok(SyncStatus::None);
+        }
+
+        Ok(SyncStatus::Info(Box::new(SyncInfo {
+            starting_block: U256::from(execution_position.starting_block_number()),
+            current_block: U256::from(current_block),
+            highest_block: U256::from(execution_position.latest_block_number()),
+            warp_chunks_amount: None,
+            warp_chunks_processed: None,
+            stages: None,
+        })))
+    }
 }
