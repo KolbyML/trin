@@ -6,6 +6,7 @@ pub mod engine;
 pub mod era;
 pub mod evm;
 pub mod metrics;
+pub mod rpc;
 pub mod storage;
 pub mod subcommands;
 pub mod syncer;

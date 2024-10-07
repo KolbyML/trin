@@ -4,6 +4,7 @@ use anyhow::{ensure, Error};
 use e2store::era2::{AccountEntry, AccountOrStorageEntry, Era2, StorageItem};
 use eth_trie::{EthTrie, Trie};
 use ethportal_api::Header;
+use parking_lot::Mutex;
 use revm_primitives::{keccak256, B256, U256};
 use tracing::info;
 
@@ -12,7 +13,10 @@ use crate::{
     config::StateConfig,
     era::manager::EraManager,
     evm::block_executor::BLOCKHASH_SERVE_WINDOW,
-    storage::{account_db::AccountDB, evm_db::EvmDB, utils::setup_rocksdb},
+    storage::{
+        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV1,
+        utils::setup_rocksdb,
+    },
 };
 
 pub struct StateImporter {
@@ -24,13 +28,15 @@ impl StateImporter {
     pub async fn new(config: ImportStateConfig, data_dir: &Path) -> anyhow::Result<Self> {
         let rocks_db = Arc::new(setup_rocksdb(data_dir)?);
 
-        let execution_position = ExecutionPosition::initialize_from_db(rocks_db.clone())?;
+        let execution_position = Arc::new(Mutex::new(ExecutionPositionV1::initialize_from_db(
+            rocks_db.clone(),
+        )?));
         ensure!(
-            execution_position.next_block_number() == 0,
+            execution_position.lock().next_block_number() == 0,
             "Cannot import state from .era2, database is not empty",
         );
 
-        let evm_db = EvmDB::new(StateConfig::default(), rocks_db, &execution_position)
+        let evm_db = EvmDB::new(StateConfig::default(), rocks_db, execution_position)
             .expect("Failed to create EVM database");
 
         Ok(Self { config, evm_db })
@@ -41,7 +47,7 @@ impl StateImporter {
         let header = self.import_state()?;
 
         // Save execution position
-        let mut execution_position = ExecutionPosition::default();
+        let mut execution_position = ExecutionPositionV1::default();
         execution_position.update_position(self.evm_db.db.clone(), &header)?;
 
         // Import last 256 block hashes

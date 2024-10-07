@@ -2,7 +2,7 @@ use clap::Parser;
 use tracing::info;
 use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands, APP_NAME},
-    execution::TrinExecution,
+    engine::service::EngineService,
     subcommands::era2::{export::StateExporter, import::StateImporter},
     syncer::Syncer,
 };
@@ -51,8 +51,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut trin_execution =
-        TrinExecution::new(&data_dir, trin_execution_config.clone().into()).await?;
+    let mut syncer = Syncer::new(&data_dir, trin_execution_config.clone().into()).await?;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
@@ -60,10 +59,14 @@ async fn main() -> anyhow::Result<()> {
         tx.send(()).expect("signal ctrl_c should never fail");
     });
 
-    let last_block = trin_execution_config.last_block.unwrap_or(LATEST_BLOCK);
-    trin_execution
-        .process_range_of_blocks(last_block, Some(rx))
-        .await?;
+    let mut engine = EngineService::spawn(syncer).await;
+
+    EngineEthRPCServer { engine }.await?;
+
+    // let last_block = trin_execution_config.last_block.unwrap_or(LATEST_BLOCK);
+    // trin_execution
+    //     .process_range_of_blocks(last_block, Some(rx))
+    //     .await?;
 
     Ok(())
 }

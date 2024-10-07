@@ -19,7 +19,10 @@ use crate::{
     cli::ExportStateConfig,
     config::StateConfig,
     era::manager::EraManager,
-    storage::{account_db::AccountDB, evm_db::EvmDB, utils::setup_rocksdb},
+    storage::{
+        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV1,
+        utils::setup_rocksdb,
+    },
 };
 
 pub struct StateExporter {
@@ -32,13 +35,15 @@ impl StateExporter {
     pub async fn new(config: ExportStateConfig, data_dir: &Path) -> anyhow::Result<Self> {
         let rocks_db = Arc::new(setup_rocksdb(data_dir)?);
 
-        let execution_position = ExecutionPosition::initialize_from_db(rocks_db.clone())?;
+        let execution_position = Arc::new(Mutex::new(ExecutionPositionV1::initialize_from_db(
+            rocks_db.clone(),
+        )?));
         ensure!(
-            execution_position.next_block_number() > 0,
+            execution_position.lock().next_block_number() > 0,
             "Trin execution not initialized!"
         );
 
-        let last_executed_block_number = execution_position.next_block_number() - 1;
+        let last_executed_block_number = execution_position.lock().next_block_number() - 1;
 
         let header = EraManager::new(last_executed_block_number)
             .await?
@@ -47,7 +52,7 @@ impl StateExporter {
             .header
             .clone();
 
-        let evm_db = EvmDB::new(StateConfig::default(), rocks_db, &execution_position)
+        let evm_db = EvmDB::new(StateConfig::default(), rocks_db, execution_position)
             .expect("Failed to create EVM database");
         ensure!(
             evm_db.trie.lock().root_hash()? == header.state_root,

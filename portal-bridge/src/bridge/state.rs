@@ -146,7 +146,7 @@ impl StateBridge {
     async fn gossip_trie_diff(
         &self,
         root_with_trie_diff: RootWithTrieDiff,
-        trin_execution: &mut TrinExecution,
+        trin_execution: &mut Syncer,
     ) -> anyhow::Result<()> {
         let block_hash = trin_execution
             .era_manager

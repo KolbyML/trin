@@ -130,3 +130,15 @@ impl Default for ExecutionPositionV0 {
         }
     }
 }
+
+impl Default for ExecutionPositionV1 {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            next_block_number: 0,
+            state_root: EMPTY_ROOT_HASH,
+            starting_block_number: 0,
+            latest_block_number: 0,
+        }
+    }
+}
