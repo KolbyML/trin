@@ -4,7 +4,7 @@ use trin_execution::{
     cli::{ExportStateConfig, ImportStateConfig},
     config::StateConfig,
     subcommands::era2::{export::StateExporter, import::StateImporter},
-    syncer::Syncer,
+    sync::syncer::Syncer,
 };
 use trin_utils::dir::create_temp_test_dir;
 

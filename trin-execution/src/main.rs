@@ -3,8 +3,9 @@ use tracing::info;
 use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands, APP_NAME},
     engine::service::EngineService,
+    rpc::engine::EngineAuthServer,
     subcommands::era2::{export::StateExporter, import::StateImporter},
-    syncer::Syncer,
+    sync::syncer::Syncer,
 };
 use trin_utils::{dir::setup_data_dir, log::init_tracing_logger};
 
@@ -51,22 +52,26 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut syncer = Syncer::new(&data_dir, trin_execution_config.clone().into()).await?;
-
     let (tx, rx) = tokio::sync::oneshot::channel();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
-        tx.send(()).expect("signal ctrl_c should never fail");
-    });
 
-    let mut engine = EngineService::spawn(syncer).await;
+    let mut syncer = Syncer::new(&data_dir, trin_execution_config.clone().into()).await?;
+    let ss = syncer.execution_position.clone();
 
-    EngineEthRPCServer { engine }.await?;
+    let mut engine_tx = EngineService::spawn(syncer).await;
+
+    let engine_api_rpc_handle =
+        EngineAuthServer::start(engine_tx, ss, &data_dir, trin_execution_config.clone()).await?;
 
     // let last_block = trin_execution_config.last_block.unwrap_or(LATEST_BLOCK);
     // trin_execution
     //     .process_range_of_blocks(last_block, Some(rx))
     //     .await?;
+
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.unwrap();
+        let _ = engine_api_rpc_handle.stop();
+        tx.send(()).expect("signal ctrl_c should never fail");
+    });
 
     Ok(())
 }

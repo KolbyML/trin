@@ -9,8 +9,8 @@ use tokio::sync::{
 use tracing::error;
 
 use crate::{
-    blockchain_tree::BlockchainTree, engine::command::EngineCommand, era::types::ProcessedBlock,
-    syncer::Syncer,
+    blockchain_tree::BlockchainTree, engine::command::EngineCommand,
+    sync::era::types::ProcessedBlock, sync::syncer::Syncer,
 };
 
 pub struct EngineService {

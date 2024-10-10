@@ -5,7 +5,7 @@ use std::{
 
 use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_rlp::Decodable;
-use anyhow::ensure;
+use anyhow::{bail, ensure};
 use e2store::era2::{
     AccountEntry, AccountOrStorageEntry, Era2, StorageEntry, StorageItem, MAX_STORAGE_ITEMS,
 };
@@ -18,11 +18,11 @@ use tracing::info;
 use crate::{
     cli::ExportStateConfig,
     config::StateConfig,
-    era::manager::EraManager,
     storage::{
         account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV1,
         utils::setup_rocksdb,
     },
+    sync::era::{manager::EraManager, types::SyncStatus},
 };
 
 pub struct StateExporter {
@@ -45,12 +45,14 @@ impl StateExporter {
 
         let last_executed_block_number = execution_position.lock().next_block_number() - 1;
 
-        let header = EraManager::new(last_executed_block_number)
+        let header = match EraManager::new(last_executed_block_number)
             .await?
             .get_next_block()
             .await?
-            .header
-            .clone();
+        {
+            SyncStatus::Syncing(block) => block.header.clone(),
+            SyncStatus::Finished => bail!("Cannot export state from block that is not finalized"),
+        };
 
         let evm_db = EvmDB::new(StateConfig::default(), rocks_db, execution_position)
             .expect("Failed to create EVM database");

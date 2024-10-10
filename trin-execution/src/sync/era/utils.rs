@@ -12,7 +12,7 @@ use reqwest::Client;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-use crate::era::{
+use crate::sync::era::{
     execution_payload::ProcessExecutionPayload,
     types::{EraType, ProcessedBlock, TransactionsWithSender},
 };

@@ -339,7 +339,7 @@ mod tests {
         Header,
     };
 
-    use crate::era::execution_payload::ProcessExecutionPayload;
+    use crate::sync::era::execution_payload::ProcessExecutionPayload;
 
     #[tokio::test]
     async fn process_execution_payload() {

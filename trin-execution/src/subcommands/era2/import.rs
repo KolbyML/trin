@@ -11,12 +11,12 @@ use tracing::info;
 use crate::{
     cli::ImportStateConfig,
     config::StateConfig,
-    era::manager::EraManager,
     evm::block_executor::BLOCKHASH_SERVE_WINDOW,
     storage::{
         account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV1,
         utils::setup_rocksdb,
     },
+    sync::era::{manager::EraManager, types::SyncStatus},
 };
 
 pub struct StateImporter {
@@ -142,11 +142,17 @@ impl StateImporter {
         let first_block_hash_to_add = block_number.saturating_sub(BLOCKHASH_SERVE_WINDOW);
         let mut era_manager = EraManager::new(first_block_hash_to_add).await?;
         while era_manager.next_block_number() < block_number {
-            let block = era_manager.get_next_block().await?;
-            self.evm_db.db.put(
-                keccak256(B256::from(U256::from(block.header.number))),
-                block.header.hash(),
-            )?
+            match era_manager.get_next_block().await? {
+                SyncStatus::Syncing(block) => {
+                    self.evm_db.db.put(
+                        keccak256(B256::from(U256::from(block.header.number))),
+                        block.header.hash(),
+                    )?;
+                }
+                SyncStatus::Finished => {
+                    break;
+                }
+            }
         }
 
         Ok(())

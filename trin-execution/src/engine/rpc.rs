@@ -27,8 +27,8 @@ use tokio::sync::{
 };
 
 use crate::{
-    era::execution_payload::ProcessExecutionPayload,
     storage::execution_position::ExecutionPositionV1,
+    sync::era::execution_payload::ProcessExecutionPayload,
 };
 
 use super::{command::EngineCommand, error::EngineApiError};
@@ -188,9 +188,8 @@ const CAPABILITIES: [&str; 16] = [
     "engine_newPayloadV4",
 ];
 
-struct EngineRPCServer {
+pub struct EngineRPCServer {
     consensus_capabilities: Arc<Mutex<Vec<String>>>,
-    execution_position: Arc<Mutex<ExecutionPositionV1>>,
     engine_tx: UnboundedSender<EngineCommand>,
 }
 
@@ -439,21 +438,23 @@ impl EngineApiServer for EngineRPCServer {
 }
 
 impl EngineRPCServer {
-    pub fn new(
-        consensus_capabilities: Arc<Mutex<Vec<String>>>,
-        execution_position: Arc<Mutex<ExecutionPositionV1>>,
-        engine_tx: UnboundedSender<EngineCommand>,
-    ) -> Self {
+    pub fn new(engine_tx: UnboundedSender<EngineCommand>) -> Self {
+        let consensus_capabilities = Arc::new(Mutex::new(Vec::new()));
         Self {
             consensus_capabilities,
-            execution_position,
             engine_tx,
         }
     }
 }
 
-struct EngineEthRPCServer {
+pub struct EngineEthRPCServer {
     execution_position: Arc<Mutex<ExecutionPositionV1>>,
+}
+
+impl EngineEthRPCServer {
+    pub fn new(execution_position: Arc<Mutex<ExecutionPositionV1>>) -> Self {
+        Self { execution_position }
+    }
 }
 
 #[async_trait]

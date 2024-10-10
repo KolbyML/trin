@@ -4,7 +4,7 @@ use std::{
 };
 
 use alloy_primitives::B256;
-use anyhow::ensure;
+use anyhow::{bail, ensure};
 use eth_trie::{RootWithTrieDiff, Trie};
 use ethportal_api::{types::execution::transaction::Transaction, Header};
 use parking_lot::Mutex as ParkingMutex;
@@ -13,13 +13,15 @@ use tokio::sync::{oneshot::Receiver, Mutex};
 use tracing::{info, warn};
 
 use crate::{
-    era::manager::EraManager,
+    config::StateConfig,
     evm::block_executor::BlockExecutor,
     metrics::{start_timer_vec, stop_timer, BLOCK_PROCESSING_TIMES},
     storage::{evm_db::EvmDB, execution_position::ExecutionPositionV1, utils::setup_rocksdb},
+    sync::era::{
+        manager::EraManager,
+        types::{ProcessedBlock, SyncStatus},
+    },
 };
-
-use super::config::StateConfig;
 
 pub struct Syncer {
     pub database: EvmDB,
@@ -80,18 +82,12 @@ impl Syncer {
 
         let mut block_executor = BlockExecutor::new(self.database.clone());
 
-        loop {
-            let fetching_block_timer =
-                start_timer_vec(&BLOCK_PROCESSING_TIMES, &["fetching_block_from_era"]);
-            let block = self
-                .era_manager
-                .lock()
-                .await
-                .get_next_block()
-                .await?
-                .clone();
-            stop_timer(fetching_block_timer);
+        let mut block = match self.fetch_next_block().await? {
+            SyncStatus::Syncing(processed_block) => processed_block,
+            SyncStatus::Finished => bail!("No more blocks to process"),
+        };
 
+        loop {
             block_executor
                 .execute_block_with_tracer(&block, |tx| self.create_tracer(&block.header, tx))?;
 
@@ -99,7 +95,14 @@ impl Syncer {
             let stop_signal_received = stop_signal
                 .as_mut()
                 .is_some_and(|stop_signal| stop_signal.try_recv().is_ok());
-            if block.header.number == last_block || stop_signal_received {
+
+            // Fetch next block
+            let next_block = self.fetch_next_block().await?;
+
+            if block.header.number == last_block
+                || stop_signal_received
+                || next_block == SyncStatus::Finished
+            {
                 if stop_signal_received {
                     info!("Stop signal received. Committing now, please wait!");
                 }
@@ -114,6 +117,11 @@ impl Syncer {
                 return Ok(result);
             }
 
+            block = match next_block {
+                SyncStatus::Syncing(processed_block) => processed_block,
+                SyncStatus::Finished => panic!("We checked that SyncStatus is not Finished above, so if this panics it's a bug"),
+            };
+
             // Commit early if we have reached the limits, to prevent too much memory usage.
             // We won't use this during the dos attack to avoid writing empty accounts to disk
             if block_executor.should_commit()
@@ -123,6 +131,14 @@ impl Syncer {
                 block_executor = BlockExecutor::new(self.database.clone());
             }
         }
+    }
+
+    async fn fetch_next_block(&self) -> anyhow::Result<SyncStatus> {
+        let fetching_block_timer =
+            start_timer_vec(&BLOCK_PROCESSING_TIMES, &["fetching_block_from_era"]);
+        let block = self.era_manager.lock().await.get_next_block().await?;
+        stop_timer(fetching_block_timer);
+        Ok(block)
     }
 
     pub fn get_root(&mut self) -> anyhow::Result<B256> {
@@ -171,7 +187,7 @@ mod tests {
 
     use trin_utils::dir::create_temp_test_dir;
 
-    use crate::era::utils::process_era1_file;
+    use crate::sync::era::utils::process_era1_file;
 
     use super::*;
 

@@ -165,7 +165,7 @@ mod tests {
     use eth_trie::{RootWithTrieDiff, Trie};
     use trin_utils::dir::create_temp_test_dir;
 
-    use crate::{config::StateConfig, syncer::Syncer, trie_walker::TrieWalker};
+    use crate::{config::StateConfig, sync::syncer::Syncer, trie_walker::TrieWalker};
 
     #[tokio::test]
     async fn test_trie_walker_builds_valid_proof() {

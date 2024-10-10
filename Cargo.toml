@@ -97,6 +97,7 @@ ethereum_ssz_derive = "0.7.1"
 ethportal-api = { path = "ethportal-api" }
 futures = "0.3.23"
 hex = "0.4.3"
+http = "1.1.0"
 jsonrpsee = "0.24.4"
 keccak-hash = "0.10.0"
 lazy_static = "1.4.0"
@@ -131,6 +132,8 @@ test-log = { version = "0.2.11", features = ["trace"] }
 thiserror = "1.0.57"
 tokio = { version = "1.14.0", features = ["full"] }
 tokio-test = "0.4.2"
+tower = { version = "0.4.13", features = ["full"] }
+tower-http = { version = "0.5.1", features = ["full"] }
 tracing = "0.1.36"
 tracing-subscriber = "0.3.15"
 tracing-test = "0.1"

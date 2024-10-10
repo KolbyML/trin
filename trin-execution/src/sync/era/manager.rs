@@ -12,18 +12,20 @@ use reqwest::{
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use crate::era::{
+use crate::sync::era::{
     constants::FIRST_ERA_EPOCH_WITH_EXECUTION_PAYLOAD,
     utils::{download_raw_era, process_era1_file, process_era_file},
 };
 
 use super::{
     binary_search::EraBinarySearch,
-    types::{EraType, ProcessedBlock, ProcessedEra},
+    lastest_block::get_latest_block_number_available_from_era,
+    types::{EraType, ProcessedBlock, ProcessedEra, SyncStatus},
 };
 
 pub struct EraManager {
     next_block_number: u64,
+    last_available_block_number: Option<u64>,
     current_era: Option<ProcessedEra>,
     next_era: Option<JoinHandle<anyhow::Result<ProcessedEra>>>,
     http_client: Client,
@@ -49,6 +51,7 @@ impl EraManager {
             http_client,
             era1_files,
             era_files,
+            last_available_block_number: None,
         };
 
         // initialize the next era file
@@ -69,6 +72,26 @@ impl EraManager {
         self.next_block_number
     }
 
+    pub async fn last_available_block_number(&mut self) -> anyhow::Result<u64> {
+        match self.last_available_block_number {
+            Some(last_available_block_number) => Ok(last_available_block_number),
+            None => {
+                Ok({
+                    let (_, latest_era_file) = self.era_files.iter().max_by_key(|(key, _)| *key).expect(
+                    "era_files should not be empty, it should be initialized in EraManager::new",
+                );
+                    let latest_block_number = get_latest_block_number_available_from_era(
+                        latest_era_file.clone(),
+                        &self.http_client,
+                    )
+                    .await?;
+                    self.last_available_block_number = Some(latest_block_number);
+                    latest_block_number
+                })
+            }
+        }
+    }
+
     pub async fn last_fetched_block(&self) -> anyhow::Result<&ProcessedBlock> {
         let Some(current_era) = &self.current_era else {
             panic!("current_era should be initialized in EraManager::new");
@@ -80,7 +103,11 @@ impl EraManager {
         Ok(current_era.get_block(self.next_block_number - 1))
     }
 
-    pub async fn get_next_block(&mut self) -> anyhow::Result<&ProcessedBlock> {
+    pub async fn get_next_block(&mut self) -> anyhow::Result<SyncStatus> {
+        if self.next_block_number == self.last_available_block_number().await? {
+            return Ok(SyncStatus::Finished);
+        }
+
         let processed_era = match &self.current_era {
             Some(processed_era) if processed_era.contains_block(self.next_block_number) => {
                 self.current_era.as_ref().expect("current_era to be some")
@@ -97,7 +124,7 @@ impl EraManager {
         let block = processed_era.get_block(self.next_block_number);
         self.next_block_number += 1;
 
-        Ok(block)
+        Ok(SyncStatus::Syncing(block.clone()))
     }
 
     /// gets the next era file and processes it, and starts fetching the next one in the background
