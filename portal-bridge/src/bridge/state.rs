@@ -22,7 +22,7 @@ use trin_execution::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
-    syncer::Syncer,
+    sync::syncer::Syncer,
     trie_walker::TrieWalker,
     types::{block_to_trace::BlockToTrace, trie_proof::TrieProof},
     utils::full_nibble_path_to_address_hash,
