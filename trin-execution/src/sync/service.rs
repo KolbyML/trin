@@ -1,8 +1,8 @@
 use std::thread::JoinHandle;
 
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 
-use super::syncer2::BlockingSyncer;
+use super::blocking_syncer::BlockingSyncer;
 
 pub struct SyncService {
     blocking_syncer: BlockingSyncer,
@@ -13,14 +13,15 @@ impl SyncService {
         Self { blocking_syncer }
     }
 
-    pub fn spawn_background_syncer(&self) -> (JoinHandle<anyhow::Result<()>>, oneshot::Sender<()>) {
+    pub fn spawn_background_syncer(
+        &self,
+        shutdown_signal: broadcast::Receiver<()>,
+    ) -> JoinHandle<anyhow::Result<()>> {
         let mut blocking_syncer = self.blocking_syncer.clone();
-        let (shutdown_signal_sender, shutdown_signal_receiver) = oneshot::channel();
-        let join_handle = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             blocking_syncer
-                .process_range_of_blocks(None, Some(shutdown_signal_receiver))
+                .process_range_of_blocks(None, Some(shutdown_signal))
                 .map(|_| ())
-        });
-        (join_handle, shutdown_signal_sender)
+        })
     }
 }

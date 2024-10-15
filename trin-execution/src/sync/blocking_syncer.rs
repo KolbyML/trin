@@ -8,7 +8,7 @@ use anyhow::{bail, ensure};
 use eth_trie::{RootWithTrieDiff, Trie};
 use ethportal_api::{types::execution::transaction::Transaction, Header};
 use revm::inspectors::TracerEip3155;
-use tokio::sync::{mpsc::UnboundedSender, oneshot::Receiver, Mutex};
+use tokio::sync::{broadcast, mpsc::UnboundedSender, Mutex};
 use tracing::{info, warn};
 
 use crate::{
@@ -64,13 +64,17 @@ impl BlockingSyncer {
     pub fn process_range_of_blocks(
         &mut self,
         last_block: Option<u64>,
-        mut stop_signal: Option<Receiver<()>>,
+        mut stop_signal: Option<broadcast::Receiver<()>>,
     ) -> anyhow::Result<RootWithTrieDiff> {
         let start_block = self.execution_position.blocking_lock().next_block_number();
-        ensure!(
-            last_block >= Some(start_block),
-            "Last block number {last_block:?} is less than start block number {start_block}",
-        );
+
+        // Ensure that last block is greater than or equal to start block if specified.
+        if last_block.is_some() {
+            ensure!(
+                last_block >= Some(start_block),
+                "Last block number {last_block:?} is less than start block number {start_block}",
+            );
+        }
 
         info!("Processing blocks from {start_block} to {last_block:?} (inclusive)");
 
@@ -97,9 +101,7 @@ impl BlockingSyncer {
                 || stop_signal_received
                 || next_block == SyncStatus::Finished
             {
-                if stop_signal_received {
-                    info!("Stop signal received. Committing now, please wait!");
-                }
+                info!("Stop signal received or syncer reached last block. Committing now, please wait!");
 
                 let result = self.commit(&block.header, block_executor)?;
 

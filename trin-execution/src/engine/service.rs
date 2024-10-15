@@ -10,17 +10,19 @@ use tokio::sync::{
     oneshot::Sender,
     Mutex,
 };
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     blockchain::Blockchain,
     engine::command::EngineCommand,
     storage::{evm_db::EvmDB, execution_position::ExecutionPositionV1},
     sync::{
-        block::service::BlockService, era::types::ProcessedBlock, service::SyncService,
-        syncer2::BlockingSyncer,
+        block::service::BlockService, blocking_syncer::BlockingSyncer, era::types::ProcessedBlock,
+        service::SyncService,
     },
 };
+
+use super::thread_manager::ThreadManager;
 
 pub struct EngineService {
     command_rx: UnboundedReceiver<EngineCommand>,
@@ -28,6 +30,7 @@ pub struct EngineService {
     // trin_execution: TrinExecution,
     _sync_service: SyncService,
     _blockchain: Blockchain,
+    shutdown_signal: broadcast::Receiver<()>,
 }
 
 impl EngineService {
@@ -35,7 +38,7 @@ impl EngineService {
         data_dir: &Path,
         execution_position: Arc<Mutex<ExecutionPositionV1>>,
         evm_db: EvmDB,
-        shutdown_signal_sender: broadcast::Sender<()>,
+        thread_manager: &mut ThreadManager,
     ) -> UnboundedSender<EngineCommand> {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
 
@@ -43,10 +46,11 @@ impl EngineService {
             .await
             .expect("Failed to create block service");
 
-        let block_requester = block_service
-            .spawn(shutdown_signal_sender.subscribe())
+        let (join_handle, block_requester) = block_service
+            .spawn(thread_manager.shutdown_signal_2_receiver())
             .await
             .expect("Failed to spawn block service");
+        thread_manager.append_tokio_handle_2(join_handle);
 
         let blocking_syncer = BlockingSyncer::new(
             data_dir,
@@ -57,29 +61,26 @@ impl EngineService {
         )
         .expect("Failed to create blocking syncer");
         let sync_service = SyncService::new(blocking_syncer);
-        let (_, sync_service_shutdown_sender) = sync_service.spawn_background_syncer();
+        info!("Starting sync service");
+        let join_handle =
+            sync_service.spawn_background_syncer(thread_manager.shutdown_signal_1_receiver());
+        info!("Sync service started2");
+        thread_manager.append_std_handle_1(join_handle);
 
-        let mut shutdown_signal_receiver = shutdown_signal_sender.subscribe();
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = shutdown_signal_receiver.recv() => {
-                    if let Err(err) = sync_service_shutdown_sender.send(()) {
-                        error!("Failed to send shutdown signal to blocking syncer: {err:?}");
-                    }
-                }
-            }
-        });
-
-        tokio::spawn(async move {
+        let shutdown_signal = thread_manager.shutdown_signal_2_receiver();
+        let join_handle = tokio::spawn(async move {
             let engine_service = EngineService {
                 command_rx,
                 _blockchain: Blockchain {},
                 latest_canonical_header_hash: None,
                 _sync_service: sync_service,
+                shutdown_signal,
             };
 
             engine_service.start().await;
+            Ok(())
         });
+        thread_manager.append_tokio_handle_2(join_handle);
 
         command_tx
     }
@@ -87,6 +88,9 @@ impl EngineService {
     async fn start(mut self) {
         loop {
             tokio::select! {
+                _ = self.shutdown_signal.recv() => {
+                    break;
+                }
                 Some(command) = self.command_rx.recv() => {
                     match command {
                         EngineCommand::NewPayload((processed_block, response_tx)) => self.handle_new_payload(processed_block, response_tx).await,

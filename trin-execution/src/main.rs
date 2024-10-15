@@ -2,7 +2,7 @@ use clap::Parser;
 use tracing::info;
 use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands, APP_NAME},
-    engine::{service::EngineService, utils::initialize_database},
+    engine::{service::EngineService, thread_manager::ThreadManager, utils::initialize_database},
     rpc::engine::EngineAuthServer,
     subcommands::era2::{export::StateExporter, import::StateImporter},
 };
@@ -49,15 +49,14 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let (shutdown_signal_sender, _) = tokio::sync::broadcast::channel(1);
-
     let (execution_position, evm_db) =
         initialize_database(&data_dir, trin_execution_config.clone().into()).await?;
+    let mut thread_manager = ThreadManager::new();
     let engine_tx = EngineService::spawn(
         &data_dir,
         execution_position.clone(),
         evm_db,
-        shutdown_signal_sender.clone(),
+        &mut thread_manager,
     )
     .await;
 
@@ -69,18 +68,16 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    // let last_block = trin_execution_config.last_block.unwrap_or(LATEST_BLOCK);
-    // trin_execution
-    //     .process_range_of_blocks(last_block, Some(rx))
-    //     .await?;
-
-    tokio::spawn(async move {
+    let join_handle = tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
+        info!("Received SIGINT, shutting down");
         let _ = engine_api_rpc_handle.stop();
-        shutdown_signal_sender
-            .send(())
-            .expect("signal ctrl_c should never fail");
+
+        // Wait for all threads to finish
+        thread_manager.shutdown_services().await;
     });
+
+    join_handle.await?;
 
     Ok(())
 }

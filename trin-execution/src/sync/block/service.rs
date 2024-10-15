@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use tokio::sync::{broadcast::Receiver, mpsc::UnboundedSender, Mutex};
+use tokio::{
+    sync::{broadcast::Receiver, mpsc::UnboundedSender, Mutex},
+    task::JoinHandle,
+};
 use tracing::error;
 
 use crate::{storage::execution_position::ExecutionPositionV1, sync::era::manager::EraManager};
@@ -23,16 +26,16 @@ impl BlockService {
     pub async fn spawn(
         &self,
         shutdown_signal: Receiver<()>,
-    ) -> anyhow::Result<UnboundedSender<BlockEvent>> {
+    ) -> anyhow::Result<(JoinHandle<anyhow::Result<()>>, UnboundedSender<BlockEvent>)> {
         let (send_channel, mut receive_channel) = tokio::sync::mpsc::unbounded_channel();
 
         let block_service = self.clone();
         let mut shutdown_signal = shutdown_signal;
-        tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             loop {
                 tokio::select! {
                     _ = shutdown_signal.recv() => {
-                        break;
+                        return Ok(());
                     }
                     Some(event) = receive_channel.recv() => {
                         match event {
@@ -53,6 +56,6 @@ impl BlockService {
                 }
             }
         });
-        Ok(send_channel)
+        Ok((join_handle, send_channel))
     }
 }
