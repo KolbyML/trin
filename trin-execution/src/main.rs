@@ -79,5 +79,6 @@ async fn main() -> anyhow::Result<()> {
 
     join_handle.await?;
 
+    info!("Trin Execution shutdown successfully");
     Ok(())
 }

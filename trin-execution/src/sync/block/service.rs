@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use tokio::{
     sync::{broadcast::Receiver, mpsc::UnboundedSender, Mutex},
     task::JoinHandle,
@@ -40,17 +41,22 @@ impl BlockService {
                     Some(event) = receive_channel.recv() => {
                         match event {
                             BlockEvent::FetchNextBlock(sender) => {
-                                match block_service.era_manager.lock().await.get_next_block().await {
-                                    Ok(next_block) => {
-                                        if let Err(err) = sender.send(next_block) {
-                                            error!("Block service: failed to send next block: {:?}", err);
-                                        }
-                                    },
-                                    Err(err) =>  {
-                                        error!("Block service: failed to get next block: {err:?}" );
-                                    }
+                                let next_block = block_service.era_manager.lock().await.get_next_block().await.map_err(|err| {
+                                    anyhow!("Block service: failed to get next block: {err:?}")
+                                });
+
+                                if let Err(err) = sender.send(next_block) {
+                                    error!("Block service: failed to send next block: {:?}", err);
                                 }
                             },
+                            BlockEvent::LatestBlockNumber(sender) => {
+                                let latest_block_number = block_service.era_manager.lock().await.last_available_block_number().await.map_err(|err| {
+                                    anyhow!("Block service: failed to get latest block: {err:?}" )
+                                });
+                                if let Err(err) = sender.send(latest_block_number) {
+                                    error!("Block service: failed to send latest block number: {:?}", err);
+                                }
+                            }
                         }
                     }
                 }

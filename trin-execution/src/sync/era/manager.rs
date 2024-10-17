@@ -104,8 +104,7 @@ impl EraManager {
     }
 
     pub async fn get_next_block(&mut self) -> anyhow::Result<SyncStatus> {
-        if self.next_block_number == 100_000 {
-            // if self.next_block_number == self.last_available_block_number().await? {
+        if self.next_block_number == self.last_available_block_number().await? {
             return Ok(SyncStatus::Finished);
         }
 

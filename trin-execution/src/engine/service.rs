@@ -64,7 +64,6 @@ impl EngineService {
         info!("Starting sync service");
         let join_handle =
             sync_service.spawn_background_syncer(thread_manager.shutdown_signal_1_receiver());
-        info!("Sync service started2");
         thread_manager.append_std_handle_1(join_handle);
 
         let shutdown_signal = thread_manager.shutdown_signal_2_receiver();

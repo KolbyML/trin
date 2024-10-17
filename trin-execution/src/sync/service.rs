@@ -1,6 +1,7 @@
 use std::thread::JoinHandle;
 
 use tokio::sync::broadcast;
+use tracing::{error, info};
 
 use super::blocking_syncer::BlockingSyncer;
 
@@ -19,9 +20,19 @@ impl SyncService {
     ) -> JoinHandle<anyhow::Result<()>> {
         let mut blocking_syncer = self.blocking_syncer.clone();
         std::thread::spawn(move || {
-            blocking_syncer
+            match blocking_syncer
                 .process_range_of_blocks(None, Some(shutdown_signal))
                 .map(|_| ())
+            {
+                Ok(_) => {
+                    info!("Sync service has finished syncing");
+                    Ok(())
+                }
+                Err(err) => {
+                    error!("Sync service has failed to sync: {err:?}");
+                    Err(err)
+                }
+            }
         })
     }
 }

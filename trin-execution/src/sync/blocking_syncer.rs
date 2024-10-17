@@ -68,13 +68,22 @@ impl BlockingSyncer {
     ) -> anyhow::Result<RootWithTrieDiff> {
         let start_block = self.execution_position.blocking_lock().next_block_number();
 
+        let last_block = match last_block {
+            Some(last_block) => last_block,
+            None => {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.block_requester
+                    .send(BlockEvent::LatestBlockNumber(tx))?;
+                let last_block = rx.blocking_recv()??;
+                last_block
+            }
+        };
+
         // Ensure that last block is greater than or equal to start block if specified.
-        if last_block.is_some() {
-            ensure!(
-                last_block >= Some(start_block),
-                "Last block number {last_block:?} is less than start block number {start_block}",
-            );
-        }
+        ensure!(
+            last_block >= start_block,
+            "Last block number {last_block:?} is less than start block number {start_block}",
+        );
 
         info!("Processing blocks from {start_block} to {last_block:?} (inclusive)");
 
@@ -97,7 +106,7 @@ impl BlockingSyncer {
             // Fetch next block
             let next_block = self.fetch_next_block()?;
 
-            if Some(block.header.number) == last_block
+            if block.header.number == last_block
                 || stop_signal_received
                 || next_block == SyncStatus::Finished
             {
@@ -113,11 +122,6 @@ impl BlockingSyncer {
                 return Ok(result);
             }
 
-            block = match next_block {
-                SyncStatus::Syncing(processed_block) => processed_block,
-                SyncStatus::Finished => panic!("We checked that SyncStatus is not Finished above, so if this panics it's a bug"),
-            };
-
             // Commit early if we have reached the limits, to prevent too much memory usage.
             // We won't use this during the dos attack to avoid writing empty accounts to disk
             if block_executor.should_commit()
@@ -126,6 +130,11 @@ impl BlockingSyncer {
                 self.commit(&block.header, block_executor)?;
                 block_executor = BlockExecutor::new(self.database.clone());
             }
+
+            block = match next_block {
+                SyncStatus::Syncing(processed_block) => processed_block,
+                SyncStatus::Finished => panic!("We checked that SyncStatus is not Finished above, so if this panics it's a bug"),
+            };
         }
     }
 
@@ -134,7 +143,7 @@ impl BlockingSyncer {
             start_timer_vec(&BLOCK_PROCESSING_TIMES, &["fetching_block_from_era"]);
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.block_requester.send(BlockEvent::FetchNextBlock(tx))?;
-        let block = rx.blocking_recv()?;
+        let block = rx.blocking_recv()??;
         stop_timer(fetching_block_timer);
         Ok(block)
     }

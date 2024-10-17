@@ -2,7 +2,7 @@ use tokio::{
     sync::broadcast,
     task::{spawn_blocking, JoinHandle},
 };
-use tracing::info;
+use tracing::{error, info};
 
 /// This is for long running tasks that need to be spawned in the background, not short lived tasks
 /// which return a result. Because certain tasks might depend on others for example the
@@ -48,12 +48,20 @@ impl ThreadManager {
         info!("Shutting down Trin Execution Engine");
 
         // Shutdown tier 1 services
-        self.shutdown_signal_1
-            .send(())
-            .expect("Failed to send shutdown signal 1");
+        if self.shutdown_signal_1.receiver_count() == 0 {
+            info!("No tier 1 services to shutdown");
+        } else {
+            if let Err(err) = self.shutdown_signal_1.send(()) {
+                error!(
+                    "Failed to send shutdown signal 1: {err:?} received count: {}",
+                    self.shutdown_signal_1.receiver_count()
+                );
+            }
+        }
+
         for handle in self.std_handles_1 {
-            // Spawn a blocking task to join the std thread as the join operation is blocking and
-            // can not be done in an async context or a deadlock could occur
+            // Spawn a blocking task to join the std thread as the join operation is blocking
+            // and can not be done in an async context or a deadlock could occur
             spawn_blocking(move || {
                 if let Err(err) = handle.join() {
                     info!("Std thread exited with result: {err:?}");
@@ -64,9 +72,17 @@ impl ThreadManager {
         }
 
         // Shutdown tier 2 services
-        self.shutdown_signal_2
-            .send(())
-            .expect("Failed to send shutdown signal 2");
+        if self.shutdown_signal_2.receiver_count() == 0 {
+            error!("No tier 2 services to shutdown, there should always be services in tier 2");
+        } else {
+            if let Err(err) = self.shutdown_signal_2.send(()) {
+                error!(
+                    "Failed to send shutdown signal 2: {err:?} received count: {}",
+                    self.shutdown_signal_2.receiver_count()
+                );
+            }
+        }
+
         for handle in self.tokio_handles_2 {
             if let Err(err) = handle.await.expect("Tokio thread panicked on join") {
                 info!("Tokio thread exited with result: {err:?}");

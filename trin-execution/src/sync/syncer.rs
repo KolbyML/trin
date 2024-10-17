@@ -113,11 +113,6 @@ impl Syncer {
                 return Ok(result);
             }
 
-            block = match next_block {
-                SyncStatus::Syncing(processed_block) => processed_block,
-                SyncStatus::Finished => panic!("We checked that SyncStatus is not Finished above, so if this panics it's a bug"),
-            };
-
             // Commit early if we have reached the limits, to prevent too much memory usage.
             // We won't use this during the dos attack to avoid writing empty accounts to disk
             if block_executor.should_commit()
@@ -126,6 +121,11 @@ impl Syncer {
                 self.commit(&block.header, block_executor).await?;
                 block_executor = BlockExecutor::new(self.database.clone());
             }
+
+            block = match next_block {
+                SyncStatus::Syncing(processed_block) => processed_block,
+                SyncStatus::Finished => panic!("We checked that SyncStatus is not Finished above, so if this panics it's a bug"),
+            };
         }
     }
 

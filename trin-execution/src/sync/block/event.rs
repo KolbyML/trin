@@ -1,7 +1,9 @@
+use anyhow::Result;
 use tokio::sync::oneshot::Sender;
 
 use crate::sync::era::types::SyncStatus;
 
 pub enum BlockEvent {
-    FetchNextBlock(Sender<SyncStatus>),
+    FetchNextBlock(Sender<Result<SyncStatus>>),
+    LatestBlockNumber(Sender<Result<u64>>),
 }
