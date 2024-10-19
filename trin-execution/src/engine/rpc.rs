@@ -15,6 +15,7 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::ErrorObject};
 use parking_lot::Mutex as ParkingMutex;
 use revm_primitives::{Address, B256, U256};
 use tokio::sync::{mpsc::UnboundedSender, oneshot, Mutex};
+use tracing::info;
 
 use crate::{
     storage::execution_position::ExecutionPositionV1,
@@ -189,6 +190,7 @@ impl EngineApiServer for EngineRPCServer {
         &self,
         supported_capabilities: Vec<String>,
     ) -> RpcResult<Vec<String>> {
+        info!("Received capabilities: {:?}", supported_capabilities);
         *self.consensus_capabilities.lock() = supported_capabilities;
         let capabilities: Vec<String> = CAPABILITIES
             .into_iter()
@@ -201,6 +203,7 @@ impl EngineApiServer for EngineRPCServer {
         &self,
         _client_version: ClientVersionV1,
     ) -> RpcResult<Vec<ClientVersionV1>> {
+        info!("Received client version request {:?}", _client_version);
         Ok(vec![ClientVersionV1 {
             code: ClientCode::TE,
             name: "Trin Execution".to_string(),
@@ -214,38 +217,43 @@ impl EngineApiServer for EngineRPCServer {
         fork_choice_state: ForkchoiceState,
         payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
-        // if payload_attributes is present, throw an error as we don't support block building right
-        // now
-        if payload_attributes.is_some() {
-            return Err(EngineApiError::ServerError(
-                "Trin Execution doesn't support block building for the time being.".to_string(),
-            )
-            .into());
-        }
+        info!(
+            "Received fork choice update 1  request {:?}",
+            fork_choice_state
+        );
+        return Ok(ForkchoiceUpdated::from_status(PayloadStatusEnum::Syncing));
+        // // if payload_attributes is present, throw an error as we don't support block building right
+        // // now
+        // if payload_attributes.is_some() {
+        //     return Err(EngineApiError::ServerError(
+        //         "Trin Execution doesn't support block building for the time being.".to_string(),
+        //     )
+        //     .into());
+        // }
 
-        let (command_tx, command_rx) = oneshot::channel();
+        // let (command_tx, command_rx) = oneshot::channel();
 
-        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+        // let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
 
-        self.engine_tx.send(command).map_err(|err| {
-            EngineApiError::ServerError(format!(
-                "Failed to send EngineCommand::ForkChoice: {err:?}"
-            ))
-        })?;
+        // self.engine_tx.send(command).map_err(|err| {
+        //     EngineApiError::ServerError(format!(
+        //         "Failed to send EngineCommand::ForkChoice: {err:?}"
+        //     ))
+        // })?;
 
-        let result = command_rx.await.map_err(|err| {
-            EngineApiError::ServerError(format!(
-                "Failed to receive ForkchoiceUpdated result: {err:?}"
-            ))
-        })?;
+        // let result = command_rx.await.map_err(|err| {
+        //     EngineApiError::ServerError(format!(
+        //         "Failed to receive ForkchoiceUpdated result: {err:?}"
+        //     ))
+        // })?;
 
-        let result = result.map_err(|err| {
-            EngineApiError::ServerError(format!(
-                "Failed to process EngineCommand::ForkChoice: {err:?}"
-            ))
-        })?;
+        // let result = result.map_err(|err| {
+        //     EngineApiError::ServerError(format!(
+        //         "Failed to process EngineCommand::ForkChoice: {err:?}"
+        //     ))
+        // })?;
 
-        Ok(result)
+        // Ok(result)
     }
 
     async fn fork_choice_updated_v2(
@@ -253,7 +261,11 @@ impl EngineApiServer for EngineRPCServer {
         _fork_choice_state: ForkchoiceState,
         _payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
-        todo!()
+        info!(
+            "Received fork choice update 2  request {:?}",
+            _fork_choice_state
+        );
+        Ok(ForkchoiceUpdated::from_status(PayloadStatusEnum::Syncing))
     }
 
     async fn fork_choice_updated_v3(
@@ -261,7 +273,11 @@ impl EngineApiServer for EngineRPCServer {
         _fork_choice_state: ForkchoiceState,
         _payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
-        todo!()
+        info!(
+            "Received fork choice update 3 request {:?}",
+            _fork_choice_state
+        );
+        Ok(ForkchoiceUpdated::from_status(PayloadStatusEnum::Syncing))
     }
 
     async fn get_payload_bodies_by_hash_v1(
@@ -335,59 +351,63 @@ impl EngineApiServer for EngineRPCServer {
     }
 
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
-        let block_hash = payload.block_hash;
-        let processed_block = payload.process_execution_payload().map_err(|err| {
-            EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
-        })?;
+        info!("Received new payload 1 request {:?}", payload);
+        return Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing));
+        // let block_hash = payload.block_hash;
+        // let processed_block = payload.process_execution_payload().map_err(|err| {
+        //     EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
+        // })?;
 
-        if block_hash != processed_block.header.hash() {
-            return Err(EngineApiError::ServerError(format!(
-                "Block hash mismatch: expected {block_hash} but got {}",
-                processed_block.header.hash()
-            ))
-            .into());
-        }
+        // if block_hash != processed_block.header.hash() {
+        //     return Err(EngineApiError::ServerError(format!(
+        //         "Block hash mismatch: expected {block_hash} but got {}",
+        //         processed_block.header.hash()
+        //     ))
+        //     .into());
+        // }
 
-        let (command_tx, command_rx) = oneshot::channel();
+        // let (command_tx, command_rx) = oneshot::channel();
 
-        let command = EngineCommand::NewPayload((processed_block, command_tx));
+        // let command = EngineCommand::NewPayload((processed_block, command_tx));
 
-        self.engine_tx.send(command).map_err(|err| {
-            EngineApiError::ServerError(format!(
-                "Failed to send EngineCommand::NewPayload: {err:?}"
-            ))
-        })?;
+        // self.engine_tx.send(command).map_err(|err| {
+        //     EngineApiError::ServerError(format!(
+        //         "Failed to send EngineCommand::NewPayload: {err:?}"
+        //     ))
+        // })?;
 
-        let result = command_rx.await.map_err(|err| {
-            EngineApiError::ServerError(format!("Failed to receive PayloadStatus result: {err:?}"))
-        })?;
+        // let result = command_rx.await.map_err(|err| {
+        //     EngineApiError::ServerError(format!("Failed to receive PayloadStatus result: {err:?}"))
+        // })?;
 
-        let payload_status = result.map_err(|err| {
-            EngineApiError::ServerError(format!(
-                "Failed to process EngineCommand::NewPayload: {err:?}"
-            ))
-        })?;
+        // let payload_status = result.map_err(|err| {
+        //     EngineApiError::ServerError(format!(
+        //         "Failed to process EngineCommand::NewPayload: {err:?}"
+        //     ))
+        // })?;
 
-        Ok(payload_status)
+        // Ok(payload_status)
     }
 
     async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
-        let block_hash = payload.execution_payload.block_hash;
-        let processed_block = payload.process_execution_payload().map_err(|err| {
-            EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
-        })?;
+        info!("Received new payload 2 request {:?}", payload);
+        return Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing));
+        // let block_hash = payload.execution_payload.block_hash;
+        // let processed_block = payload.process_execution_payload().map_err(|err| {
+        //     EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
+        // })?;
 
-        if block_hash != processed_block.header.hash() {
-            return Err(EngineApiError::ServerError(format!(
-                "Block hash mismatch: expected {block_hash} but got {}",
-                processed_block.header.hash()
-            ))
-            .into());
-        }
+        // if block_hash != processed_block.header.hash() {
+        //     return Err(EngineApiError::ServerError(format!(
+        //         "Block hash mismatch: expected {block_hash} but got {}",
+        //         processed_block.header.hash()
+        //     ))
+        //     .into());
+        // }
 
-        // todo: handle if data to validate payload is present.
+        // // todo: handle if data to validate payload is present.
 
-        Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing))
+        // Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing))
     }
 
     async fn new_payload_v3(
@@ -396,22 +416,24 @@ impl EngineApiServer for EngineRPCServer {
         _versioned_hashes: Vec<B256>,
         _parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus> {
-        let block_hash = payload.payload_inner.payload_inner.block_hash;
-        let processed_block = payload.process_execution_payload().map_err(|err| {
-            EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
-        })?;
+        info!("Received new payload 3 request {:?}", payload);
+        return Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing));
+        // let block_hash = payload.payload_inner.payload_inner.block_hash;
+        // let processed_block = payload.process_execution_payload().map_err(|err| {
+        //     EngineApiError::ServerError(format!("Failed to process execution payload: {err:?}"))
+        // })?;
 
-        if block_hash != processed_block.header.hash() {
-            return Err(EngineApiError::ServerError(format!(
-                "Block hash mismatch: expected {block_hash} but got {}",
-                processed_block.header.hash()
-            ))
-            .into());
-        }
+        // if block_hash != processed_block.header.hash() {
+        //     return Err(EngineApiError::ServerError(format!(
+        //         "Block hash mismatch: expected {block_hash} but got {}",
+        //         processed_block.header.hash()
+        //     ))
+        //     .into());
+        // }
 
-        // todo: handle if data to validate payload is present.
+        // // todo: handle if data to validate payload is present.
 
-        Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing))
+        // Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing))
     }
 
     async fn new_payload_v4(
@@ -420,10 +442,12 @@ impl EngineApiServer for EngineRPCServer {
         _versioned_hashes: Vec<B256>,
         _parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus> {
-        Err(EngineApiError::ServerError(
-            "Trin Execution doesn't support Pectra for the time being".to_string(),
-        )
-        .into())
+        info!("Received new payload 4 request {:?}", _payload);
+        return Ok(PayloadStatus::from_status(PayloadStatusEnum::Syncing));
+        // Err(EngineApiError::ServerError(
+        //     "Trin Execution doesn't support Pectra for the time being".to_string(),
+        // )
+        // .into())
     }
 }
 
