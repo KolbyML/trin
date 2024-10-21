@@ -122,7 +122,7 @@ impl BlockService {
         };
 
         let processed_block = beacon_block.process_execution_payload()?;
-        Ok((processed_block, next_slot_to_check))
+        Ok((processed_block, next_slot_to_check + 1))
     }
 
     async fn get_next_block(&self) -> anyhow::Result<SyncStatus> {
@@ -133,6 +133,7 @@ impl BlockService {
             .is_era_manager_out_of_blocks()
             .await?;
 
+        // If era manager runs out of blocks we switch to fetching blocks from the consensus layer client
         match is_era_manager_out_of_blocks {
             false => self
                 .era_manager
