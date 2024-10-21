@@ -16,14 +16,14 @@ use crate::{
     config::StateConfig,
     evm::block_executor::BlockExecutor,
     metrics::{start_timer_vec, stop_timer, BLOCK_PROCESSING_TIMES},
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV1, utils::setup_rocksdb},
+    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2, utils::setup_rocksdb},
     sync::era::{manager::EraManager, types::SyncStatus},
 };
 
 pub struct Syncer {
     pub database: EvmDB,
     pub config: StateConfig,
-    pub execution_position: Arc<ParkingMutex<ExecutionPositionV1>>,
+    pub execution_position: Arc<ParkingMutex<ExecutionPositionV2>>,
     pub era_manager: Arc<Mutex<EraManager>>,
     pub data_directory: PathBuf,
 }
@@ -32,7 +32,7 @@ impl Syncer {
     pub async fn new(data_dir: &Path, config: StateConfig) -> anyhow::Result<Self> {
         let db = Arc::new(setup_rocksdb(data_dir)?);
         let execution_position = Arc::new(ParkingMutex::new(
-            ExecutionPositionV1::initialize_from_db(db.clone())?,
+            ExecutionPositionV2::initialize_from_db(db.clone())?,
         ));
 
         let database = EvmDB::new(config.clone(), db, execution_position.lock().state_root())

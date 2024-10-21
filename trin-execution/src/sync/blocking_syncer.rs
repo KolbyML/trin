@@ -15,7 +15,7 @@ use crate::{
     config::StateConfig,
     evm::block_executor::BlockExecutor,
     metrics::{start_timer_vec, stop_timer, BLOCK_PROCESSING_TIMES},
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV1},
+    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2},
     sync::era::types::SyncStatus,
 };
 
@@ -25,7 +25,7 @@ use super::block::event::BlockEvent;
 pub struct BlockingSyncer {
     pub database: EvmDB,
     pub config: StateConfig,
-    pub execution_position: Arc<Mutex<ExecutionPositionV1>>,
+    pub execution_position: Arc<Mutex<ExecutionPositionV2>>,
     pub block_requester: UnboundedSender<BlockEvent>,
     pub data_directory: PathBuf,
 }
@@ -35,7 +35,7 @@ impl BlockingSyncer {
     pub fn new(
         data_dir: &Path,
         block_requester: UnboundedSender<BlockEvent>,
-        execution_position: Arc<Mutex<ExecutionPositionV1>>,
+        execution_position: Arc<Mutex<ExecutionPositionV2>>,
         database: EvmDB,
         config: StateConfig,
     ) -> anyhow::Result<Self> {
@@ -52,40 +52,14 @@ impl BlockingSyncer {
         self.execution_position.blocking_lock().next_block_number()
     }
 
-    pub fn process_next_block(&mut self) -> anyhow::Result<RootWithTrieDiff> {
-        self.process_range_of_blocks(Some(self.next_block_number()), None)
-    }
-
-    /// Processes blocks up to last block number (inclusive) and returns the root with trie diff. If
-    /// last block is None, we will process all blocks until we reach the latest block.
-    ///
-    /// If the state cache gets too big, we will commit the state and continue. Execution can be
-    /// interrupted early by sending `stop_signal`, in which case we will commit and return.
-    pub fn process_range_of_blocks(
+    /// Syncs blocks until the block service says it is done
+    pub fn sync_blocks(
         &mut self,
-        last_block: Option<u64>,
         mut stop_signal: Option<broadcast::Receiver<()>>,
     ) -> anyhow::Result<RootWithTrieDiff> {
         let start_block = self.execution_position.blocking_lock().next_block_number();
 
-        let last_block = match last_block {
-            Some(last_block) => last_block,
-            None => {
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                self.block_requester
-                    .send(BlockEvent::LatestBlockNumber(tx))?;
-                let last_block = rx.blocking_recv()??;
-                last_block
-            }
-        };
-
-        // Ensure that last block is greater than or equal to start block if specified.
-        ensure!(
-            last_block >= start_block,
-            "Last block number {last_block:?} is less than start block number {start_block}",
-        );
-
-        info!("Processing blocks from {start_block} to {last_block:?} (inclusive)");
+        info!("Starting sync from block {start_block}");
 
         let mut block_executor = BlockExecutor::new(self.database.clone());
 
@@ -106,10 +80,7 @@ impl BlockingSyncer {
             // Fetch next block
             let next_block = self.fetch_next_block()?;
 
-            if block.header.number == last_block
-                || stop_signal_received
-                || next_block == SyncStatus::Finished
-            {
+            if stop_signal_received || next_block == SyncStatus::Finished {
                 info!("Stop signal received or syncer reached last block. Committing now, please wait!");
 
                 let result = self.commit(&block.header, block_executor)?;

@@ -13,7 +13,7 @@ use crate::{
     config::StateConfig,
     evm::block_executor::BLOCKHASH_SERVE_WINDOW,
     storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV1,
+        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV2,
         utils::setup_rocksdb,
     },
     sync::era::{manager::EraManager, types::SyncStatus},
@@ -28,7 +28,7 @@ impl StateImporter {
     pub async fn new(config: ImportStateConfig, data_dir: &Path) -> anyhow::Result<Self> {
         let rocks_db = Arc::new(setup_rocksdb(data_dir)?);
 
-        let execution_position = Arc::new(Mutex::new(ExecutionPositionV1::initialize_from_db(
+        let execution_position = Arc::new(Mutex::new(ExecutionPositionV2::initialize_from_db(
             rocks_db.clone(),
         )?));
         ensure!(
@@ -51,7 +51,7 @@ impl StateImporter {
         let header = self.import_state()?;
 
         // Save execution position
-        let mut execution_position = ExecutionPositionV1::default();
+        let mut execution_position = ExecutionPositionV2::default();
         execution_position.update_position(self.evm_db.db.clone(), &header)?;
 
         // Import last 256 block hashes

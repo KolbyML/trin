@@ -49,13 +49,15 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let (execution_position, evm_db) =
+    let (execution_position, evm_db, db) =
         initialize_database(&data_dir, trin_execution_config.clone().into()).await?;
     let mut thread_manager = ThreadManager::new();
     let engine_tx = EngineService::spawn(
         &data_dir,
         execution_position.clone(),
+        db,
         evm_db,
+        trin_execution_config.clone(),
         &mut thread_manager,
     )
     .await;

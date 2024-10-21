@@ -17,10 +17,7 @@ use revm_primitives::{Address, B256, U256};
 use tokio::sync::{mpsc::UnboundedSender, oneshot, Mutex};
 use tracing::info;
 
-use crate::{
-    storage::execution_position::ExecutionPositionV1,
-    sync::era::execution_payload::ProcessExecutionPayload,
-};
+use crate::storage::execution_position::ExecutionPositionV2;
 
 use super::{command::EngineCommand, error::EngineApiError};
 
@@ -221,63 +218,125 @@ impl EngineApiServer for EngineRPCServer {
             "Received fork choice update 1  request {:?}",
             fork_choice_state
         );
-        return Ok(ForkchoiceUpdated::from_status(PayloadStatusEnum::Syncing));
-        // // if payload_attributes is present, throw an error as we don't support block building right
-        // // now
-        // if payload_attributes.is_some() {
-        //     return Err(EngineApiError::ServerError(
-        //         "Trin Execution doesn't support block building for the time being.".to_string(),
-        //     )
-        //     .into());
-        // }
+        // if payload_attributes is present, throw an error as we don't support block building right
+        // now
+        if payload_attributes.is_some() {
+            return Err(EngineApiError::ServerError(
+                "Trin Execution doesn't support block building for the time being.".to_string(),
+            )
+            .into());
+        }
 
-        // let (command_tx, command_rx) = oneshot::channel();
+        let (command_tx, command_rx) = oneshot::channel();
 
-        // let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
 
-        // self.engine_tx.send(command).map_err(|err| {
-        //     EngineApiError::ServerError(format!(
-        //         "Failed to send EngineCommand::ForkChoice: {err:?}"
-        //     ))
-        // })?;
+        self.engine_tx.send(command).map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to send EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
 
-        // let result = command_rx.await.map_err(|err| {
-        //     EngineApiError::ServerError(format!(
-        //         "Failed to receive ForkchoiceUpdated result: {err:?}"
-        //     ))
-        // })?;
+        let result = command_rx.await.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to receive ForkchoiceUpdated result: {err:?}"
+            ))
+        })?;
 
-        // let result = result.map_err(|err| {
-        //     EngineApiError::ServerError(format!(
-        //         "Failed to process EngineCommand::ForkChoice: {err:?}"
-        //     ))
-        // })?;
+        let result = result.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to process EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
 
-        // Ok(result)
+        Ok(result)
     }
 
     async fn fork_choice_updated_v2(
         &self,
-        _fork_choice_state: ForkchoiceState,
-        _payload_attributes: Option<PayloadAttributes>,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         info!(
             "Received fork choice update 2  request {:?}",
-            _fork_choice_state
+            fork_choice_state
         );
-        Ok(ForkchoiceUpdated::from_status(PayloadStatusEnum::Syncing))
+        // if payload_attributes is present, throw an error as we don't support block building right
+        // now
+        if payload_attributes.is_some() {
+            return Err(EngineApiError::ServerError(
+                "Trin Execution doesn't support block building for the time being.".to_string(),
+            )
+            .into());
+        }
+
+        let (command_tx, command_rx) = oneshot::channel();
+
+        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+
+        self.engine_tx.send(command).map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to send EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
+
+        let result = command_rx.await.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to receive ForkchoiceUpdated result: {err:?}"
+            ))
+        })?;
+
+        let result = result.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to process EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
+
+        Ok(result)
     }
 
     async fn fork_choice_updated_v3(
         &self,
-        _fork_choice_state: ForkchoiceState,
-        _payload_attributes: Option<PayloadAttributes>,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         info!(
             "Received fork choice update 3 request {:?}",
-            _fork_choice_state
+            fork_choice_state
         );
-        Ok(ForkchoiceUpdated::from_status(PayloadStatusEnum::Syncing))
+
+        // if payload_attributes is present, throw an error as we don't support block building right
+        // now
+        if payload_attributes.is_some() {
+            return Err(EngineApiError::ServerError(
+                "Trin Execution doesn't support block building for the time being.".to_string(),
+            )
+            .into());
+        }
+
+        let (command_tx, command_rx) = oneshot::channel();
+
+        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+
+        self.engine_tx.send(command).map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to send EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
+
+        let result = command_rx.await.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to receive ForkchoiceUpdated result: {err:?}"
+            ))
+        })?;
+
+        let result = result.map_err(|err| {
+            EngineApiError::ServerError(format!(
+                "Failed to process EngineCommand::ForkChoice: {err:?}"
+            ))
+        })?;
+
+        Ok(result)
     }
 
     async fn get_payload_bodies_by_hash_v1(
@@ -377,8 +436,8 @@ impl EngineApiServer for EngineRPCServer {
         // })?;
 
         // let result = command_rx.await.map_err(|err| {
-        //     EngineApiError::ServerError(format!("Failed to receive PayloadStatus result: {err:?}"))
-        // })?;
+        //     EngineApiError::ServerError(format!("Failed to receive PayloadStatus result:
+        // {err:?}")) })?;
 
         // let payload_status = result.map_err(|err| {
         //     EngineApiError::ServerError(format!(
@@ -462,11 +521,11 @@ impl EngineRPCServer {
 }
 
 pub struct EngineEthRPCServer {
-    execution_position: Arc<Mutex<ExecutionPositionV1>>,
+    execution_position: Arc<Mutex<ExecutionPositionV2>>,
 }
 
 impl EngineEthRPCServer {
-    pub fn new(execution_position: Arc<Mutex<ExecutionPositionV1>>) -> Self {
+    pub fn new(execution_position: Arc<Mutex<ExecutionPositionV2>>) -> Self {
         Self { execution_position }
     }
 }

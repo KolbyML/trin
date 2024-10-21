@@ -4,6 +4,7 @@ use std::{
 };
 
 use clap::{Args, Parser, Subcommand};
+use url::Url;
 
 use crate::types::block_to_trace::BlockToTrace;
 
@@ -64,6 +65,12 @@ pub struct TrinExecutionConfig {
         help = "Location of the jwt secret file used for authentication for the engine api RPC server. Defaults to the data directory."
     )]
     pub rpc_authentication_jwt_secret_path: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "Endpoint for the beacon node API of the running consensus layer client"
+    )]
+    pub beacon_api_endpoint: Url,
 
     #[command(subcommand)]
     pub command: Option<TrinExecutionSubCommands>,

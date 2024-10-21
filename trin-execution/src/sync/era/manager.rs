@@ -19,13 +19,14 @@ use crate::sync::era::{
 
 use super::{
     binary_search::EraBinarySearch,
-    lastest_block::get_latest_block_number_available_from_era,
+    lastest_block::get_latest_block_number_and_slot_available_from_era,
     types::{EraType, ProcessedBlock, ProcessedEra, SyncStatus},
 };
 
 pub struct EraManager {
     next_block_number: u64,
     last_available_block_number: Option<u64>,
+    last_available_slot_number: Option<u64>,
     current_era: Option<ProcessedEra>,
     next_era: Option<JoinHandle<anyhow::Result<ProcessedEra>>>,
     http_client: Client,
@@ -52,6 +53,7 @@ impl EraManager {
             era1_files,
             era_files,
             last_available_block_number: None,
+            last_available_slot_number: None,
         };
 
         // initialize the next era file
@@ -72,24 +74,50 @@ impl EraManager {
         self.next_block_number
     }
 
+    async fn populate_latest_avaliable_block_number_and_slot(
+        &mut self,
+    ) -> anyhow::Result<(u64, u64)> {
+        let (_, latest_era_file) =
+            self.era_files.iter().max_by_key(|(key, _)| *key).expect(
+                "era_files should not be empty, it should be initialized in EraManager::new",
+            );
+        let (latest_block_number, latest_slot) =
+            get_latest_block_number_and_slot_available_from_era(
+                latest_era_file.clone(),
+                &self.http_client,
+            )
+            .await?;
+        self.last_available_block_number = Some(latest_block_number);
+        self.last_available_slot_number = Some(latest_slot);
+        Ok((latest_block_number, latest_slot))
+    }
+
     pub async fn last_available_block_number(&mut self) -> anyhow::Result<u64> {
         match self.last_available_block_number {
             Some(last_available_block_number) => Ok(last_available_block_number),
-            None => {
-                Ok({
-                    let (_, latest_era_file) = self.era_files.iter().max_by_key(|(key, _)| *key).expect(
-                    "era_files should not be empty, it should be initialized in EraManager::new",
-                );
-                    let latest_block_number = get_latest_block_number_available_from_era(
-                        latest_era_file.clone(),
-                        &self.http_client,
-                    )
+            None => Ok({
+                let (latest_block_number, _) = self
+                    .populate_latest_avaliable_block_number_and_slot()
                     .await?;
-                    self.last_available_block_number = Some(latest_block_number);
-                    latest_block_number
-                })
-            }
+                latest_block_number
+            }),
         }
+    }
+
+    pub async fn last_available_slot_number(&mut self) -> anyhow::Result<u64> {
+        match self.last_available_slot_number {
+            Some(last_available_slot_number) => Ok(last_available_slot_number),
+            None => Ok({
+                let (_, latest_slot_number) = self
+                    .populate_latest_avaliable_block_number_and_slot()
+                    .await?;
+                latest_slot_number
+            }),
+        }
+    }
+
+    pub async fn is_era_manager_out_of_blocks(&mut self) -> anyhow::Result<bool> {
+        Ok(self.next_block_number > self.last_available_block_number().await?)
     }
 
     pub async fn last_fetched_block(&self) -> anyhow::Result<&ProcessedBlock> {
@@ -104,7 +132,7 @@ impl EraManager {
     }
 
     pub async fn get_next_block(&mut self) -> anyhow::Result<SyncStatus> {
-        if self.next_block_number == self.last_available_block_number().await? {
+        if self.next_block_number > self.last_available_block_number().await? {
             return Ok(SyncStatus::Finished);
         }
 

@@ -4,6 +4,7 @@ use alloy_rpc_types::engine::{
     ForkchoiceState, ForkchoiceUpdated, PayloadStatus, PayloadStatusEnum,
 };
 use revm_primitives::B256;
+use rocksdb::DB as RocksDB;
 use tokio::sync::{
     broadcast,
     mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -14,8 +15,9 @@ use tracing::{error, info};
 
 use crate::{
     blockchain::Blockchain,
+    cli::TrinExecutionConfig,
     engine::command::EngineCommand,
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV1},
+    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2},
     sync::{
         block::service::BlockService, blocking_syncer::BlockingSyncer, era::types::ProcessedBlock,
         service::SyncService,
@@ -27,6 +29,8 @@ use super::thread_manager::ThreadManager;
 pub struct EngineService {
     command_rx: UnboundedReceiver<EngineCommand>,
     latest_canonical_header_hash: Option<B256>,
+    execution_position: Arc<Mutex<ExecutionPositionV2>>,
+    db: Arc<RocksDB>,
     // trin_execution: TrinExecution,
     _sync_service: SyncService,
     _blockchain: Blockchain,
@@ -36,15 +40,20 @@ pub struct EngineService {
 impl EngineService {
     pub async fn spawn(
         data_dir: &Path,
-        execution_position: Arc<Mutex<ExecutionPositionV1>>,
+        execution_position: Arc<Mutex<ExecutionPositionV2>>,
+        db: Arc<RocksDB>,
         evm_db: EvmDB,
+        trin_execution_config: TrinExecutionConfig,
         thread_manager: &mut ThreadManager,
     ) -> UnboundedSender<EngineCommand> {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
 
-        let block_service = BlockService::new(execution_position.clone())
-            .await
-            .expect("Failed to create block service");
+        let block_service = BlockService::new(
+            execution_position.clone(),
+            trin_execution_config.beacon_api_endpoint.clone(),
+        )
+        .await
+        .expect("Failed to create block service");
 
         let (join_handle, block_requester) = block_service
             .spawn(thread_manager.shutdown_signal_2_receiver())
@@ -71,7 +80,9 @@ impl EngineService {
             let engine_service = EngineService {
                 command_rx,
                 _blockchain: Blockchain {},
+                execution_position,
                 latest_canonical_header_hash: None,
+                db,
                 _sync_service: sync_service,
                 shutdown_signal,
             };
@@ -119,6 +130,16 @@ impl EngineService {
         fork_choice_state: ForkchoiceState,
         response_tx: Sender<anyhow::Result<ForkchoiceUpdated>>,
     ) {
+        // update execution position with the new fork choice state.
+        if let Err(err) = self
+            .execution_position
+            .lock()
+            .await
+            .update_fork_choice_state(self.db.clone(), fork_choice_state)
+        {
+            error!("Failed to update execution position with new fork choice state: {err:?}");
+        };
+
         let ForkchoiceState {
             head_block_hash, ..
         } = fork_choice_state;

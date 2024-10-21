@@ -6,8 +6,7 @@ use alloy_rpc_types::engine::{
 use ethportal_api::{
     consensus::{
         beacon_block::{
-            SignedBeaconBlock, SignedBeaconBlockBellatrix, SignedBeaconBlockCapella,
-            SignedBeaconBlockDeneb,
+            BeaconBlockBellatrix, BeaconBlockCapella, BeaconBlockDeneb, SignedBeaconBlock,
         },
         body::Transactions,
     },
@@ -30,16 +29,16 @@ pub trait ProcessExecutionPayload {
 impl ProcessExecutionPayload for SignedBeaconBlock {
     fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
         match self {
-            SignedBeaconBlock::Bellatrix(block) => block.process_execution_payload(),
-            SignedBeaconBlock::Capella(block) => block.process_execution_payload(),
-            SignedBeaconBlock::Deneb(block) => block.process_execution_payload(),
+            SignedBeaconBlock::Bellatrix(block) => block.message.process_execution_payload(),
+            SignedBeaconBlock::Capella(block) => block.message.process_execution_payload(),
+            SignedBeaconBlock::Deneb(block) => block.message.process_execution_payload(),
         }
     }
 }
 
-impl ProcessExecutionPayload for SignedBeaconBlockBellatrix {
+impl ProcessExecutionPayload for BeaconBlockBellatrix {
     fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
-        let payload = &self.message.body.execution_payload;
+        let payload = &self.body.execution_payload;
 
         let transactions = process_transactions(&payload.transactions)?;
         let transactions_root = calculate_merkle_patricia_root(
@@ -80,9 +79,9 @@ impl ProcessExecutionPayload for SignedBeaconBlockBellatrix {
     }
 }
 
-impl ProcessExecutionPayload for SignedBeaconBlockCapella {
+impl ProcessExecutionPayload for BeaconBlockCapella {
     fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
-        let payload = &self.message.body.execution_payload;
+        let payload = &self.body.execution_payload;
 
         let transactions = process_transactions(&payload.transactions)?;
         let transactions_root = calculate_merkle_patricia_root(
@@ -127,9 +126,9 @@ impl ProcessExecutionPayload for SignedBeaconBlockCapella {
     }
 }
 
-impl ProcessExecutionPayload for SignedBeaconBlockDeneb {
+impl ProcessExecutionPayload for BeaconBlockDeneb {
     fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
-        let payload = &self.message.body.execution_payload;
+        let payload = &self.body.execution_payload;
 
         let transactions = process_transactions(&payload.transactions)?;
         let transactions_root = calculate_merkle_patricia_root(
@@ -162,7 +161,7 @@ impl ProcessExecutionPayload for SignedBeaconBlockDeneb {
             withdrawals_root: Some(withdrawals_root),
             blob_gas_used: Some(U64::from(payload.blob_gas_used)),
             excess_blob_gas: Some(U64::from(payload.excess_blob_gas)),
-            parent_beacon_block_root: Some(self.message.parent_root),
+            parent_beacon_block_root: Some(self.parent_root),
         };
 
         Ok(ProcessedBlock {

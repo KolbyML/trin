@@ -17,7 +17,7 @@ use crate::{
         rpc::{EngineApiServer, EngineEthApiServer, EngineEthRPCServer, EngineRPCServer},
     },
     rpc::utils::read_default_jwt_secret,
-    storage::execution_position::ExecutionPositionV1,
+    storage::execution_position::ExecutionPositionV2,
 };
 
 pub struct EngineAuthServer {}
@@ -25,7 +25,7 @@ pub struct EngineAuthServer {}
 impl EngineAuthServer {
     pub async fn start(
         engine_tx: UnboundedSender<EngineCommand>,
-        execution_position: Arc<Mutex<ExecutionPositionV1>>,
+        execution_position: Arc<Mutex<ExecutionPositionV2>>,
         data_dir: &Path,
         trin_execution_config: TrinExecutionConfig,
     ) -> anyhow::Result<ServerHandle> {

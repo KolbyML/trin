@@ -45,6 +45,7 @@ tower-http.workspace = true
 tracing.workspace = true
 trin-evm.workspace = true
 trin-utils.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true

@@ -6662,6 +6662,7 @@ dependencies = [
  "tracing-test",
  "trin-evm",
  "trin-utils",
+ "url",
 ]
 
 [[package]]

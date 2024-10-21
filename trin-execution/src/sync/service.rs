@@ -21,7 +21,7 @@ impl SyncService {
         let mut blocking_syncer = self.blocking_syncer.clone();
         std::thread::spawn(move || {
             match blocking_syncer
-                .process_range_of_blocks(None, Some(shutdown_signal))
+                .sync_blocks(Some(shutdown_signal))
                 .map(|_| ())
             {
                 Ok(_) => {

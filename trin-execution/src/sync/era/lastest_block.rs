@@ -7,10 +7,10 @@ use reqwest::Client;
 
 use crate::sync::era::utils::download_range_from_file;
 
-pub async fn get_latest_block_number_available_from_era(
+pub async fn get_latest_block_number_and_slot_available_from_era(
     era_path: String,
     http_client: &Client,
-) -> anyhow::Result<u64> {
+) -> anyhow::Result<(u64, u64)> {
     {
         // download era file length
         let response = http_client.head(&era_path).send().await?;
@@ -78,7 +78,10 @@ pub async fn get_latest_block_number_available_from_era(
         let fork = get_beacon_fork(last_slot_number);
         let beacon_block = CompressedSignedBeaconBlock::try_from(&entry, fork)?;
 
-        Ok(beacon_block.block.execution_block_number())
+        Ok((
+            beacon_block.block.execution_block_number(),
+            beacon_block.block.slot(),
+        ))
     }
 }
 
@@ -89,17 +92,22 @@ mod tests {
     use tracing::info;
 
     #[test_log::test(tokio::test)]
-    async fn test_get_latest_block_number_available_from_era() -> anyhow::Result<()> {
+    async fn test_get_latest_block_number_and_slot_available_from_era() -> anyhow::Result<()> {
         let http_client = Client::new();
         let era_files = get_era_files(&http_client).await?;
         let (_, latest_era_file) = era_files.iter().max_by_key(|(key, _)| *key).unwrap();
 
-        let block_number =
-            get_latest_block_number_available_from_era(latest_era_file.to_string(), &http_client)
-                .await
-                .unwrap();
+        let block_number_and_slot = get_latest_block_number_and_slot_available_from_era(
+            latest_era_file.to_string(),
+            &http_client,
+        )
+        .await
+        .unwrap();
 
-        info!("Latest block number in era file: {}", block_number);
+        info!(
+            "Latest block number in era file: {:?}",
+            block_number_and_slot
+        );
 
         Ok(())
     }

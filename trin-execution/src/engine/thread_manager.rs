@@ -50,13 +50,11 @@ impl ThreadManager {
         // Shutdown tier 1 services
         if self.shutdown_signal_1.receiver_count() == 0 {
             info!("No tier 1 services to shutdown");
-        } else {
-            if let Err(err) = self.shutdown_signal_1.send(()) {
-                error!(
-                    "Failed to send shutdown signal 1: {err:?} received count: {}",
-                    self.shutdown_signal_1.receiver_count()
-                );
-            }
+        } else if let Err(err) = self.shutdown_signal_1.send(()) {
+            error!(
+                "Failed to send shutdown signal 1: {err:?} received count: {}",
+                self.shutdown_signal_1.receiver_count()
+            );
         }
 
         for handle in self.std_handles_1 {
@@ -74,13 +72,11 @@ impl ThreadManager {
         // Shutdown tier 2 services
         if self.shutdown_signal_2.receiver_count() == 0 {
             error!("No tier 2 services to shutdown, there should always be services in tier 2");
-        } else {
-            if let Err(err) = self.shutdown_signal_2.send(()) {
-                error!(
-                    "Failed to send shutdown signal 2: {err:?} received count: {}",
-                    self.shutdown_signal_2.receiver_count()
-                );
-            }
+        } else if let Err(err) = self.shutdown_signal_2.send(()) {
+            error!(
+                "Failed to send shutdown signal 2: {err:?} received count: {}",
+                self.shutdown_signal_2.receiver_count()
+            );
         }
 
         for handle in self.tokio_handles_2 {

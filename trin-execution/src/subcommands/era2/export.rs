@@ -19,7 +19,7 @@ use crate::{
     cli::ExportStateConfig,
     config::StateConfig,
     storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV1,
+        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV2,
         utils::setup_rocksdb,
     },
     sync::era::{manager::EraManager, types::SyncStatus},
@@ -35,7 +35,7 @@ impl StateExporter {
     pub async fn new(config: ExportStateConfig, data_dir: &Path) -> anyhow::Result<Self> {
         let rocks_db = Arc::new(setup_rocksdb(data_dir)?);
 
-        let execution_position = Arc::new(Mutex::new(ExecutionPositionV1::initialize_from_db(
+        let execution_position = Arc::new(Mutex::new(ExecutionPositionV2::initialize_from_db(
             rocks_db.clone(),
         )?));
         ensure!(
