@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::future::join_all;
+use futures::{executor::block_on, future::join_all};
 use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
     task::JoinHandle,
@@ -11,6 +11,7 @@ use tokio::{
 };
 use tracing::{debug, error, info, warn, Instrument};
 use trin_metrics::bridge::BridgeMetricsReporter;
+use url::Url;
 
 use crate::{
     api::execution::ExecutionApi,
@@ -22,7 +23,7 @@ use crate::{
 };
 use ethportal_api::{
     jsonrpsee::http_client::HttpClient, types::execution::accumulator::EpochAccumulator,
-    HistoryContentKey,
+    HistoryContentKey, HistoryContentValue,
 };
 use trin_validation::{
     constants::{EPOCH_SIZE, MERGE_BLOCK_NUMBER},
@@ -402,4 +403,40 @@ impl HistoryBridge {
             .await
             .expect("to be able to acquire semaphore")
     }
+}
+
+// get block from infura by number and verify the transaction root in a test
+#[tokio::test]
+async fn test_get_block_by_number() {
+    let key = "input here";
+    if key == "input here" {
+        panic!("Please input your infura key");
+    }
+    let execution_api = ExecutionApi::new(
+        Url::parse(&("https://mainnet.infura.io/v3/".to_string() + key)).unwrap(),
+        Url::parse(&("https://mainnet.infura.io/v3/".to_string() + key)).unwrap(),
+        20,
+    )
+    .await
+    .unwrap();
+    let block_number = 21228921;
+
+    let full_header = execution_api.get_header(block_number, None).await.unwrap();
+    let block_body = execution_api.get_block_body(&full_header.0).await.unwrap();
+
+    let HistoryContentValue::BlockBody(body) = block_body.1 else {
+        panic!(
+            "Expected HistoryContentValue::BlockBody, got: {:?}",
+            block_body.1
+        );
+    };
+    println!(
+        "transaction root 1 {:?}, transaction root 2 {:?}",
+        full_header.0.header.transactions_root,
+        body.transactions_root().unwrap()
+    );
+    assert_eq!(
+        full_header.0.header.transactions_root,
+        body.transactions_root().unwrap()
+    );
 }
