@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use eth_trie::{EthTrie, MemoryDB, Trie};
 use futures::{executor::block_on, future::join_all};
 use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
@@ -439,4 +440,17 @@ async fn test_get_block_by_number() {
         full_header.0.header.transactions_root,
         body.transactions_root().unwrap()
     );
+
+    let memdb = Arc::new(MemoryDB::new(true));
+    let mut trie = EthTrie::new(memdb.clone());
+
+    for (index, tx) in body.transactions().iter().enumerate() {
+        let path = alloy::rlp::encode(index);
+        let encoded_tx = alloy::rlp::encode(tx);
+        trie.insert(&path, &encoded_tx).expect("Failed to insert");
+        println!("index {}: {:?}", index, path);
+    }
+
+    let root_hash = trie.root_hash().expect("Failed to get root hash");
+    assert_eq!(full_header.0.header.transactions_root, root_hash);
 }
