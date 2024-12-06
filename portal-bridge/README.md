@@ -53,7 +53,8 @@ cargo run -p portal-bridge -- --executable-path ./target/debug/trin --epoch-accu
 
 - `"--mode single:b100"`: backfill, always beginning from block #0 until the specified block (#100)
 - `"--mode single:r50-100"`: backfill, gossips state diffs for blocks in #50-#100 range (inclusive)
-- `"--mode snapshot:1000000"`: gossips a state snapshot at the respective block, in this example the state snapshot at block 1,000,000 will be gossiped. This mode is only used for the State Network.
+- `"--mode snapshot:1000000"`: gossips a state snapshot at the respective block, in this example the state snapshot at block 1,000,000 will be gossiped.
+- `"--mode snapshot:random_slice:1000000:10"`: gossips a randoms slice of the state snapshot at the respective block, in this example the state snapshot at block 1,000,000 will be gossiped. It will choose to gossip random slices of the state, in this example it will split the trie into 10 gossipible counts.
 
 
 ### Subnetwork configuration

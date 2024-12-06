@@ -45,7 +45,7 @@ use trin_execution::{
         import::StateImporter,
         utils::{download_with_progress, percentage_from_address_hash},
     },
-    trie_walker::TrieWalker,
+    trie_walker::{filter::Filter, TrieWalker},
     types::{block_to_trace::BlockToTrace, trie_proof::TrieProof},
     utils::full_nibble_path_to_address_hash,
 };
@@ -56,7 +56,7 @@ use crate::{
     bridge::history::SERVE_BLOCK_TIMEOUT,
     census::Census,
     cli::BridgeId,
-    types::mode::{BridgeMode, ModeType},
+    types::mode::{BridgeMode, ModeType, SnapshotMode},
 };
 
 pub struct StateBridge {
@@ -105,8 +105,14 @@ impl StateBridge {
             // TODO: This should only gossip state trie at this block
             BridgeMode::Single(ModeType::Block(block)) => (0, block),
             BridgeMode::Single(ModeType::BlockRange(start_block, end_block)) => (start_block, end_block),
-            BridgeMode::Snapshot(snapshot_block) => {
-                self.launch_snapshot(snapshot_block)
+            BridgeMode::Snapshot(SnapshotMode::Block(block_number)) => {
+                self.launch_snapshot(block_number, None)
+                    .await
+                    .expect("State bridge failed");
+                return;
+            },
+            BridgeMode::Snapshot(SnapshotMode::RandomSlice(block_number, slice_count)) => {
+                self.launch_snapshot(block_number, Some(slice_count))
                     .await
                     .expect("State bridge failed");
                 return;
@@ -174,7 +180,11 @@ impl StateBridge {
         Ok(())
     }
 
-    async fn launch_snapshot(&self, snapshot_block: u64) -> anyhow::Result<()> {
+    async fn launch_snapshot(
+        &self,
+        snapshot_block: u64,
+        slice_count: Option<u16>,
+    ) -> anyhow::Result<()> {
         ensure!(snapshot_block > 0, "Snapshot block must be greater than 0");
 
         // 1. Download the era2 file and import the state snapshot
@@ -250,9 +260,23 @@ impl StateBridge {
         let mut evm_db = EvmDB::new(StateConfig::default(), rocks_db, &execution_position)
             .expect("Failed to create EVM database");
 
-        self.gossip_whole_state_snapshot(&mut evm_db, execution_position)
+        loop {
+            // generate a new random filter for each iteration
+            let filter = slice_count.map(Filter::new_random_filter);
+
+            self.gossip_whole_state_snapshot(
+                &mut evm_db,
+                execution_position.clone(),
+                filter.clone(),
+            )
             .await
             .expect("State bridge failed");
+
+            // if there is no filter then we only want to gossip the state snapshot once
+            if filter.is_none() {
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -350,6 +374,7 @@ impl StateBridge {
         &self,
         evm_db: &mut EvmDB,
         execution_position: ExecutionPosition,
+        filter: Option<Filter>,
     ) -> anyhow::Result<()> {
         let start = Instant::now();
 
@@ -360,7 +385,9 @@ impl StateBridge {
 
         let root_hash = evm_db.trie.lock().root_hash()?;
         let mut content_idx = 0;
-        let state_walker = TrieWalker::new(root_hash, evm_db.trie.lock().db.clone(), None)?;
+
+        info!("Gossiping state snapshot for block: {number} with filter: {filter:?}");
+        let state_walker = TrieWalker::new(root_hash, evm_db.trie.lock().db.clone(), filter)?;
         for account_proof in state_walker {
             // gossip the account
             self.gossip_account(&account_proof, block_hash, content_idx)
@@ -385,7 +412,7 @@ impl StateBridge {
             let address_hash = full_nibble_path_to_address_hash(&full_key_path);
 
             leaf_count += 1;
-            if leaf_count % 100 == 0 {
+            if leaf_count % 1 == 0 {
                 let elapsed_secs = start.elapsed().as_secs_f64();
                 let percentage_done = percentage_from_address_hash(address_hash);
 

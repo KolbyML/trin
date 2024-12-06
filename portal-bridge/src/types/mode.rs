@@ -23,7 +23,7 @@ pub enum BridgeMode {
     FourFours(FourFoursMode),
     Backfill(ModeType),
     Single(ModeType),
-    Snapshot(u64),
+    Snapshot(SnapshotMode),
     Test(PathBuf),
 }
 
@@ -103,10 +103,8 @@ impl FromStr for BridgeMode {
                         Ok(BridgeMode::Single(mode_type))
                     }
                     "snapshot" => {
-                        let snapshot = val[1..]
-                            .parse()
-                            .map_err(|_| "Invalid snapshot arg: snapshot number")?;
-                        Ok(BridgeMode::Snapshot(snapshot))
+                        let mode_type = SnapshotMode::from_str(&val[1..])?;
+                        Ok(BridgeMode::Snapshot(mode_type))
                     }
                     "test" => {
                         let path =
@@ -300,6 +298,42 @@ impl FromStr for FourFoursMode {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SnapshotMode {
+    // Gossips a state snapshot at the given block
+    Block(u64),
+    // Repetitively gossips random slices of the state trie
+    RandomSlice(u64, u16),
+}
+
+impl FromStr for SnapshotMode {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err("Invalid bridge snapshot mode arg: empty string".to_string());
+        }
+        if s.starts_with("random_slice") {
+            let mut split = s.split(':');
+            let _ = split.next();
+            let block_number = split
+                .next()
+                .expect("Invalid snapshot bridge random slice mode arg: missing block number")
+                .parse()
+                .expect("Invalid snapshot bridge random slice mode arg: invalid block number");
+            let slice_count = split
+                .next()
+                .expect("Invalid snapshot bridge random slice mode arg: missing slice count")
+                .parse()
+                .expect("Invalid snapshot bridge random slice mode arg: invalid slice count");
+            return Ok(SnapshotMode::RandomSlice(block_number, slice_count));
+        }
+        let block_number = s
+            .parse()
+            .map_err(|_| "Invalid snapshot bridge mode arg: block number")?;
+        Ok(SnapshotMode::Block(block_number))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -330,6 +364,14 @@ mod test {
     #[case(
         "test:/usr/eth/test.json",
         BridgeMode::Test(PathBuf::from("/usr/eth/test.json"))
+    )]
+    #[case(
+        "snapshot:21000000",
+        BridgeMode::Snapshot(SnapshotMode::Block(21_000_000))
+    )]
+    #[case(
+        "snapshot:random_slice:21000000:50",
+        BridgeMode::Snapshot(SnapshotMode::RandomSlice(21_000_000, 50))
     )]
     fn test_mode_flag(#[case] actual: String, #[case] expected: BridgeMode) {
         let bridge_mode = BridgeMode::from_str(&actual).unwrap();

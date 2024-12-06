@@ -5,8 +5,8 @@ use crate::utils::partial_nibble_path_to_right_padded_b256;
 
 #[derive(Debug, Clone)]
 pub struct Filter {
-    start_prefix: B256,
-    end_prefix: B256,
+    pub start_prefix: B256,
+    pub end_prefix: B256,
 }
 
 impl Filter {
