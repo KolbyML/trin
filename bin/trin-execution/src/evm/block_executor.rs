@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use alloy::genesis::Genesis;
 use anyhow::{bail, ensure};
 use eth_trie::{RootWithTrieDiff, Trie};
 use ethportal_api::{
@@ -24,32 +25,19 @@ use trin_evm::{
     create_block_env, create_evm_with_tracer, spec_id::get_spec_id, tx_env_modifier::TxEnvModifier,
 };
 
-use super::post_block_beneficiaries::get_post_block_beneficiaries;
+use super::{genesis::import_genesis, post_block_beneficiaries::get_post_block_beneficiaries};
 use crate::{
-    era::types::{ProcessedBlock, TransactionsWithSender},
     evm::pre_block_contracts::apply_pre_block_contracts,
     metrics::{
         set_int_gauge_vec, start_timer_vec, stop_timer, BLOCK_HEIGHT, BLOCK_PROCESSING_TIMES,
         TRANSACTION_PROCESSING_TIMES,
     },
     storage::evm_db::EvmDB,
+    subcommands::era2::import,
+    sync::era::types::{ProcessedBlock, TransactionsWithSender},
 };
 
 pub const BLOCKHASH_SERVE_WINDOW: u64 = 256;
-const GENESIS_STATE_FILE: &str = "trin-execution/resources/genesis/mainnet.json";
-const TEST_GENESIS_STATE_FILE: &str = "resources/genesis/mainnet.json";
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AllocBalance {
-    balance: U256,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GenesisConfig {
-    alloc: HashMap<Address, AllocBalance>,
-    state_root: B256,
-}
 
 /// BlockExecutor is a struct that is responsible for executing blocks or a block in memory.
 ///
@@ -66,10 +54,12 @@ pub struct BlockExecutor<'a> {
     executed_blocks: u64,
     /// Sum of gas used of all executed blocks.
     cumulative_gas_used: u64,
+    /// Save reverts of state changes.
+    _save_reverts: bool,
 }
 
 impl<'a> BlockExecutor<'a> {
-    pub fn new(database: EvmDB) -> Self {
+    pub fn new(database: EvmDB, _save_reverts: bool) -> Self {
         let state_database = State::builder()
             .with_database(database)
             .with_bundle_update()
@@ -81,6 +71,7 @@ impl<'a> BlockExecutor<'a> {
             creation_time: Instant::now(),
             executed_blocks: 0,
             cumulative_gas_used: 0,
+            _save_reverts,
         }
     }
 
@@ -114,7 +105,7 @@ impl<'a> BlockExecutor<'a> {
             .db_mut()
             .merge_transitions(BundleRetention::PlainState);
         let state_bundle = self.evm.db_mut().take_bundle();
-        self.evm.db_mut().database.commit_bundle(state_bundle)?;
+        let _reverts = self.evm.db_mut().database.commit_bundle(state_bundle)?;
         stop_timer(timer);
 
         let timer = start_timer_vec(&BLOCK_PROCESSING_TIMES, &["get_root_with_trie_diff"]);
@@ -132,31 +123,10 @@ impl<'a> BlockExecutor<'a> {
     }
 
     fn process_genesis(&mut self) -> anyhow::Result<()> {
-        let genesis_file = if Path::new(GENESIS_STATE_FILE).is_file() {
-            File::open(GENESIS_STATE_FILE)?
-        } else if Path::new(TEST_GENESIS_STATE_FILE).is_file() {
-            File::open(TEST_GENESIS_STATE_FILE)?
-        } else {
-            bail!("Genesis file not found")
-        };
-        let genesis: GenesisConfig = serde_json::from_reader(BufReader::new(genesis_file))?;
+        let genesis: Genesis =
+            serde_json::from_str(include_str!("../../resources/genesis/mainnet.json"))?;
 
-        for (address, alloc_balance) in genesis.alloc {
-            let address_hash = keccak256(address);
-            let mut account = AccountState::default();
-            account.balance += alloc_balance.balance;
-            self.evm
-                .db()
-                .database
-                .trie
-                .lock()
-                .insert(address_hash.as_ref(), &alloy::rlp::encode(&account))?;
-            self.evm
-                .db()
-                .database
-                .db
-                .put(address_hash, alloy::rlp::encode(account))?;
-        }
+        import_genesis(&mut self.evm.db_mut().database, &genesis)?;
 
         Ok(())
     }

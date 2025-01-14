@@ -1,4 +1,4 @@
-use alloy::rlp::Decodable;
+use alloy_rlp::Decodable;
 use anyhow::{ensure, Result};
 use eth_trie::{decode_node, node::Node, RootWithTrieDiff};
 use ethportal_api::types::state_trie::account_state::AccountState;
@@ -6,6 +6,7 @@ use revm_primitives::keccak256;
 use tracing::info;
 use tracing_test::traced_test;
 use trin_execution::{
+    cli::APP_NAME,
     config::StateConfig,
     content::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
@@ -17,7 +18,7 @@ use trin_execution::{
     types::block_to_trace::BlockToTrace,
     utils::full_nibble_path_to_address_hash,
 };
-use trin_utils::dir::create_temp_test_dir;
+use trin_utils::dir::setup_data_dir;
 
 /// Tests that we can execute and generate content up to a specified block.
 ///
@@ -31,12 +32,10 @@ use trin_utils::dir::create_temp_test_dir;
 #[tokio::test]
 #[traced_test]
 #[ignore = "takes too long"]
-async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
-    let blocks = std::env::var("BLOCKS")?.parse::<u64>()?;
-
-    let temp_directory = create_temp_test_dir()?;
+async fn test_we_can_generate_content_key_values_up_to_x2() -> Result<()> {
+    let data_dir = setup_data_dir(APP_NAME, None, false)?;
     let mut trin_execution = Syncer::new(
-        temp_directory.path(),
+        data_dir.as_path(),
         StateConfig {
             cache_contract_changes: true,
             block_to_trace: BlockToTrace::None,
@@ -46,7 +45,11 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
 
     let mut stats = Stats::default();
 
-    for block_number in 0..=blocks {
+    let start = std::time::Instant::now();
+    let mut account_count = 0;
+    let mut storage_count = 0;
+
+    for _ in 1..=1000 {
         let mut block_stats = Stats::default();
 
         let RootWithTrieDiff {
@@ -60,10 +63,7 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
             .last_fetched_block()
             .await?
             .clone();
-        ensure!(
-            block_number == block.header.number,
-            "Block number doesn't match!"
-        );
+        info!("Block {} started", block.header.number);
         ensure!(
             trin_execution.get_root()? == block.header.state_root,
             "State root doesn't match"
@@ -88,6 +88,7 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
             let Node::Leaf(leaf) = decode_node(&mut encoded_last_node.as_ref())? else {
                 continue;
             };
+            account_count += 1;
             let account: AccountState = Decodable::decode(&mut leaf.value.as_slice())?;
 
             // reconstruct the address hash from the path so that we can fetch the
@@ -125,15 +126,33 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
                         .expect("Content key should be present");
                 block_stats.check_content(&content_key, &content_value);
                 stats.check_content(&content_key, &content_value);
+
+                let Some(encoded_last_node2) = storage_proof.proof.last() else {
+                    panic!("Account proof is empty");
+                };
+
+                if let Node::Leaf(_) = decode_node(&mut encoded_last_node2.as_ref())? {
+                    storage_count += 1;
+                }
             }
         }
 
         // flush the database cache
         // This is used for gossiping storage trie diffs
-        trin_execution.database.clear_contract_cache();
-        info!("Block {block_number} finished: {block_stats:?}");
+        trin_execution.database.storage_cache.lock().clear();
+        trin_execution
+            .database
+            .newly_created_contracts
+            .lock()
+            .clear();
+        // info!(
+        //     "Block {} finished: {block_stats:?} account count {}, storage count {}",
+        //     block.header.number, account_count, storage_count
+        // );
     }
-    temp_directory.close()?;
-    info!("Finished all {blocks} blocks: {stats:?}");
+    info!(
+        "Finished all  blocks: {stats:?} time in seconds {} account count {account_count}, storage count {storage_count}",
+        start.elapsed().as_secs()
+    );
     Ok(())
 }

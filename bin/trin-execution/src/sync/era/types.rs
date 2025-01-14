@@ -5,7 +5,7 @@ use ethportal_api::{
 use revm_primitives::{Address, SpecId, TxEnv};
 use trin_evm::{spec_id::get_spec_block_number, tx_env_modifier::TxEnvModifier};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionsWithSender {
     pub transaction: Transaction,
     pub sender_address: Address,
@@ -23,7 +23,7 @@ impl TxEnvModifier for TransactionsWithSender {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessedBlock {
     pub header: Header,
     pub uncles: Option<Vec<Header>>,
@@ -71,4 +71,11 @@ impl EraType {
             Self::Era
         }
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum SyncStatus {
+    Block(ProcessedBlock),
+    ConsensusClientIsSyncing,
+    Finished,
 }

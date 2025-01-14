@@ -1,12 +1,14 @@
 use alloy::{
-    primitives::{Bloom, B64, U64},
+    primitives::{Bloom, Bytes, B64, U64},
     rlp::Decodable,
+};
+use alloy_rpc_types_engine::{
+    ExecutionPayloadInputV2, ExecutionPayloadV1, ExecutionPayloadV2, ExecutionPayloadV3,
 };
 use ethportal_api::{
     consensus::{
         beacon_block::{
-            SignedBeaconBlock, SignedBeaconBlockBellatrix, SignedBeaconBlockCapella,
-            SignedBeaconBlockDeneb,
+            BeaconBlockBellatrix, BeaconBlockCapella, BeaconBlockDeneb, SignedBeaconBlock,
         },
         body::Transactions,
     },
@@ -22,23 +24,23 @@ use super::types::{ProcessedBlock, TransactionsWithSender};
 const EMPTY_UNCLE_ROOT_HASH: B256 =
     b256!("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
 
-pub trait ProcessBeaconBlock {
-    fn process_beacon_block(&self) -> anyhow::Result<ProcessedBlock>;
+pub trait ProcessExecutionPayload {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock>;
 }
 
-impl ProcessBeaconBlock for SignedBeaconBlock {
-    fn process_beacon_block(&self) -> anyhow::Result<ProcessedBlock> {
+impl ProcessExecutionPayload for SignedBeaconBlock {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
         match self {
-            SignedBeaconBlock::Bellatrix(block) => block.process_beacon_block(),
-            SignedBeaconBlock::Capella(block) => block.process_beacon_block(),
-            SignedBeaconBlock::Deneb(block) => block.process_beacon_block(),
+            SignedBeaconBlock::Bellatrix(block) => block.message.process_execution_payload(),
+            SignedBeaconBlock::Capella(block) => block.message.process_execution_payload(),
+            SignedBeaconBlock::Deneb(block) => block.message.process_execution_payload(),
         }
     }
 }
 
-impl ProcessBeaconBlock for SignedBeaconBlockBellatrix {
-    fn process_beacon_block(&self) -> anyhow::Result<ProcessedBlock> {
-        let payload = &self.message.body.execution_payload;
+impl ProcessExecutionPayload for BeaconBlockBellatrix {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
+        let payload = &self.body.execution_payload;
 
         let transactions = process_transactions(&payload.transactions)?;
         let transactions_root = calculate_merkle_patricia_root(
@@ -71,7 +73,7 @@ impl ProcessBeaconBlock for SignedBeaconBlockBellatrix {
         };
 
         Ok(ProcessedBlock {
-            header: header.clone(),
+            header,
             uncles: None,
             withdrawals: None,
             transactions,
@@ -79,9 +81,9 @@ impl ProcessBeaconBlock for SignedBeaconBlockBellatrix {
     }
 }
 
-impl ProcessBeaconBlock for SignedBeaconBlockCapella {
-    fn process_beacon_block(&self) -> anyhow::Result<ProcessedBlock> {
-        let payload = &self.message.body.execution_payload;
+impl ProcessExecutionPayload for BeaconBlockCapella {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
+        let payload = &self.body.execution_payload;
 
         let transactions = process_transactions(&payload.transactions)?;
         let transactions_root = calculate_merkle_patricia_root(
@@ -118,7 +120,7 @@ impl ProcessBeaconBlock for SignedBeaconBlockCapella {
         };
 
         Ok(ProcessedBlock {
-            header: header.clone(),
+            header,
             uncles: None,
             withdrawals: Some(withdrawals),
             transactions,
@@ -126,9 +128,9 @@ impl ProcessBeaconBlock for SignedBeaconBlockCapella {
     }
 }
 
-impl ProcessBeaconBlock for SignedBeaconBlockDeneb {
-    fn process_beacon_block(&self) -> anyhow::Result<ProcessedBlock> {
-        let payload = &self.message.body.execution_payload;
+impl ProcessExecutionPayload for BeaconBlockDeneb {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
+        let payload = &self.body.execution_payload;
 
         let transactions = process_transactions(&payload.transactions)?;
         let transactions_root = calculate_merkle_patricia_root(
@@ -161,11 +163,11 @@ impl ProcessBeaconBlock for SignedBeaconBlockDeneb {
             withdrawals_root: Some(withdrawals_root),
             blob_gas_used: Some(U64::from(payload.blob_gas_used)),
             excess_blob_gas: Some(U64::from(payload.excess_blob_gas)),
-            parent_beacon_block_root: Some(self.message.parent_root),
+            parent_beacon_block_root: Some(self.parent_root),
         };
 
         Ok(ProcessedBlock {
-            header: header.clone(),
+            header,
             uncles: None,
             withdrawals: Some(withdrawals),
             transactions,
@@ -173,8 +175,158 @@ impl ProcessBeaconBlock for SignedBeaconBlockDeneb {
     }
 }
 
+impl ProcessExecutionPayload for ExecutionPayloadV1 {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
+        let transactions = process_transactions_from_bytes(&self.transactions)?;
+        let transactions_root = calculate_merkle_patricia_root(
+            transactions
+                .iter()
+                .map(|transaction| &transaction.transaction),
+        )?;
+
+        let header = Header {
+            parent_hash: self.parent_hash,
+            uncles_hash: EMPTY_UNCLE_ROOT_HASH,
+            author: self.fee_recipient,
+            state_root: self.state_root,
+            transactions_root,
+            receipts_root: self.receipts_root,
+            logs_bloom: self.logs_bloom,
+            difficulty: U256::ZERO,
+            number: self.block_number,
+            gas_limit: U256::from(self.gas_limit),
+            gas_used: U256::from(self.gas_used),
+            timestamp: self.timestamp,
+            extra_data: self.extra_data.to_vec(),
+            mix_hash: Some(self.prev_randao),
+            nonce: Some(B64::ZERO),
+            base_fee_per_gas: Some(self.base_fee_per_gas),
+            withdrawals_root: None,
+            blob_gas_used: None,
+            excess_blob_gas: None,
+            parent_beacon_block_root: None,
+        };
+
+        Ok(ProcessedBlock {
+            header,
+            uncles: None,
+            withdrawals: None,
+            transactions,
+        })
+    }
+}
+
+impl ProcessExecutionPayload for ExecutionPayloadInputV2 {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
+        let ExecutionPayloadInputV2 {
+            execution_payload,
+            withdrawals,
+        } = self;
+
+        let processed_block = execution_payload.process_execution_payload()?;
+
+        let withdrawals = withdrawals.as_ref().map(|withdrawals| {
+            withdrawals
+                .iter()
+                .map(|withdrawal| Withdrawal {
+                    index: withdrawal.index,
+                    validator_index: withdrawal.validator_index,
+                    address: withdrawal.address,
+                    amount: withdrawal.amount,
+                })
+                .collect::<Vec<_>>()
+        });
+        let withdrawals_root = calculate_merkle_patricia_root(&withdrawals)?;
+
+        let header = Header {
+            withdrawals_root: Some(withdrawals_root),
+            ..processed_block.header
+        };
+
+        Ok(ProcessedBlock {
+            header,
+            uncles: None,
+            withdrawals,
+            transactions: processed_block.transactions,
+        })
+    }
+}
+
+pub struct ExecutionPayloadV3WithBeaconBlockHash {
+    payload_inner: ExecutionPayloadV3,
+    parent_beacon_block_root: B256,
+}
+
+impl ExecutionPayloadV3WithBeaconBlockHash {
+    pub fn new(payload_inner: ExecutionPayloadV3, parent_beacon_block_root: B256) -> Self {
+        Self {
+            payload_inner,
+            parent_beacon_block_root,
+        }
+    }
+}
+
+impl ProcessExecutionPayload for ExecutionPayloadV3WithBeaconBlockHash {
+    fn process_execution_payload(&self) -> anyhow::Result<ProcessedBlock> {
+        let ExecutionPayloadV3 {
+            payload_inner,
+            blob_gas_used,
+            excess_blob_gas,
+        } = &self.payload_inner;
+
+        let ExecutionPayloadV2 {
+            payload_inner,
+            withdrawals,
+        } = payload_inner.clone();
+
+        let execution_payload_v2 = ExecutionPayloadInputV2 {
+            execution_payload: payload_inner,
+            withdrawals: Some(withdrawals),
+        };
+
+        let ProcessedBlock {
+            header,
+            withdrawals,
+            transactions,
+            ..
+        } = execution_payload_v2.process_execution_payload()?;
+
+        let header = Header {
+            blob_gas_used: Some(U64::from(*blob_gas_used)),
+            excess_blob_gas: Some(U64::from(*excess_blob_gas)),
+            parent_beacon_block_root: Some(self.parent_beacon_block_root),
+            ..header
+        };
+
+        Ok(ProcessedBlock {
+            header,
+            uncles: None,
+            withdrawals,
+            transactions,
+        })
+    }
+}
+
 fn process_transactions(
     transactions: &Transactions,
+) -> anyhow::Result<Vec<TransactionsWithSender>> {
+    transactions
+        .into_par_iter()
+        .map(|raw_tx| {
+            let transaction = Transaction::decode(&mut raw_tx.to_vec().as_slice())
+                .map_err(|err| anyhow::anyhow!("Failed decoding transaction rlp: {err:?}"))?;
+            transaction
+                .get_transaction_sender_address()
+                .map(|sender_address| TransactionsWithSender {
+                    sender_address,
+                    transaction,
+                })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()
+}
+
+fn process_transactions_from_bytes(
+    transactions: &Vec<Bytes>,
 ) -> anyhow::Result<Vec<TransactionsWithSender>> {
     transactions
         .into_par_iter()
@@ -201,19 +353,19 @@ mod tests {
         Header,
     };
 
-    use crate::era::beacon::ProcessBeaconBlock;
+    use crate::sync::era::execution_payload::ProcessExecutionPayload;
 
     #[tokio::test]
-    async fn process_beacon_block() {
+    async fn process_execution_payload() {
         let signed_beacon_block_for_execution_block_15537397 =
-            std::fs::read("../../test_assets/beacon/bellatrix/ValidSignedBeaconBlock/signed_beacon_block_15537397.ssz").unwrap();
+            std::fs::read("../test_assets/beacon/bellatrix/ValidSignedBeaconBlock/signed_beacon_block_15537397.ssz").unwrap();
         let signed_beacon_block = SignedBeaconBlock::from_ssz_bytes(
             &signed_beacon_block_for_execution_block_15537397,
             ForkName::Bellatrix,
         )
         .unwrap();
 
-        let processed_block = signed_beacon_block.process_beacon_block().unwrap();
+        let processed_block = signed_beacon_block.process_execution_payload().unwrap();
         let expected: Header = Header {
             parent_hash: B256::from_str(
                 "0x98c735877f2f30bad54fc46ba8bcd93a54da32a60b2905cb23ad6c7a70ebaa40",
