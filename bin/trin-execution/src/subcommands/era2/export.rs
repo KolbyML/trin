@@ -4,7 +4,7 @@ use std::{
 };
 
 use alloy::{consensus::EMPTY_ROOT_HASH, rlp::Decodable};
-use anyhow::ensure;
+use anyhow::{bail, ensure};
 use e2store::era2::{
     AccountEntry, AccountOrStorageEntry, Era2Writer, StorageEntry, StorageItem, MAX_STORAGE_ITEMS,
 };
@@ -17,12 +17,13 @@ use tracing::info;
 use crate::{
     cli::ExportStateConfig,
     config::StateConfig,
-    era::manager::EraManager,
     storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPosition,
+        execution_position::ExecutionPositionV2,
+        state::{account_db::AccountDB, evm_db::EvmDB},
         utils::setup_rocksdb,
     },
     subcommands::era2::utils::percentage_from_address_hash,
+    sync::era::{manager::EraManager, types::SyncStatus},
 };
 
 pub struct StateExporter {
@@ -35,23 +36,34 @@ impl StateExporter {
     pub async fn new(config: ExportStateConfig, data_dir: &Path) -> anyhow::Result<Self> {
         let rocks_db = Arc::new(setup_rocksdb(data_dir)?);
 
-        let execution_position = ExecutionPosition::initialize_from_db(rocks_db.clone())?;
+        let execution_position = Arc::new(Mutex::new(ExecutionPositionV2::initialize_from_db(
+            rocks_db.clone(),
+        )?));
         ensure!(
-            execution_position.next_block_number() > 0,
+            execution_position.lock().next_block_number() > 0,
             "Trin execution not initialized!"
         );
 
-        let last_executed_block_number = execution_position.next_block_number() - 1;
+        let last_executed_block_number = execution_position.lock().next_block_number() - 1;
 
-        let header = EraManager::new(last_executed_block_number)
+        let header = match EraManager::new(last_executed_block_number)
             .await?
             .get_next_block()
             .await?
-            .header
-            .clone();
+        {
+            SyncStatus::Block(block) => block.header.clone(),
+            SyncStatus::Finished => bail!("Cannot export state from block that is not finalized"),
+            SyncStatus::ConsensusClientIsSyncing => {
+                unreachable!("EraManager doesn't use consensus client, so it can't be syncing")
+            }
+        };
 
-        let evm_db = EvmDB::new(StateConfig::default(), rocks_db, &execution_position)
-            .expect("Failed to create EVM database");
+        let evm_db = EvmDB::new(
+            StateConfig::default(),
+            rocks_db,
+            execution_position.lock().state_root(),
+        )
+        .expect("Failed to create EVM database");
         ensure!(
             evm_db.trie.lock().root_hash()? == header.state_root,
             "State root mismatch from block header we are trying to export"
@@ -69,7 +81,8 @@ impl StateExporter {
             "Exporting state from block number: {} with state root: {}",
             self.header.number, self.header.state_root
         );
-        let mut era2 = Era2Writer::create(&self.config.path_to_era2, self.header.clone())?;
+        let mut era2 = Era2Writer::create(&self.config.path_to_era2, self.header.clone())
+            .map_err(|err| anyhow::anyhow!("Failed to create .era2 file: {}", err))?;
         info!("Era2 initiated");
         info!("Trie leaf iterator initiated");
         let mut accounts_exported = 0;

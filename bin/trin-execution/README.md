@@ -39,3 +39,5 @@ cargo run -p trin-execution -- --ephemeral
 
 ## Want to see metrics of how Trin Execution is performing
 Go to [metrics/README.md](metrics/README.md) to find out more
+
+## Bridging state

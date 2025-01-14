@@ -137,6 +137,7 @@ checksum = "5d0d6c784abf2e061139798d51299da278fc8f02d7b7546662b898d9b22ab5e9"
 dependencies = [
  "alloy-primitives",
  "num_enum",
+ "serde",
  "strum",
 ]
 
@@ -476,6 +477,8 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "derive_more 1.0.0",
+ "jsonwebtoken",
+ "rand",
  "serde",
  "strum",
 ]
@@ -1821,7 +1824,16 @@ version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e69600ff1703123957937708eb27f7a564e48885c537782722ed0ba3189ce1d7"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.3.7",
+]
+
+[[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys 0.4.1",
 ]
 
 [[package]]
@@ -1833,6 +1845,18 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3466,6 +3490,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "9.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9ae10193d25051e74945f1ea2d0b42e03cc3b890f7e4cc5faa44997d808193f"
+dependencies = [
+ "base64 0.21.7",
+ "js-sys",
+ "pem",
+ "ring",
+ "serde",
+ "serde_json",
+ "simple_asn1",
+]
+
+[[package]]
 name = "k256"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4068,6 +4107,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4174,6 +4219,16 @@ dependencies = [
  "proc-macro2-diagnostics",
  "quote",
  "syn 2.0.97",
+]
+
+[[package]]
+name = "pem"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e459365e590736a54c3fa561947c84837534b8e9af6fc5bf781307e82658fae"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
 ]
 
 [[package]]
@@ -4383,7 +4438,6 @@ dependencies = [
  "tracing",
  "tracing-test",
  "trin-evm",
- "trin-execution",
  "trin-metrics",
  "trin-utils",
  "trin-validation",
@@ -4865,8 +4919,8 @@ dependencies = [
 
 [[package]]
 name = "reth-ipc"
-version = "1.0.8"
-source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.0.8#d72e438c06e040e213b5decf5f29543c86cbad0f"
+version = "1.0.7"
+source = "git+https://github.com/paradigmxyz/reth.git?tag=v1.0.7#75b7172cf77eb4fd65fe1a6924f75066fb09fcd1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5731,6 +5785,18 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest 0.10.7",
  "rand_core",
+]
+
+[[package]]
+name = "simple_asn1"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "297f631f50729c8c99b84667867963997ec0b50f32b2a7dbcab828ef0541e8bb"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "thiserror 2.0.11",
+ "time",
 ]
 
 [[package]]
@@ -6736,36 +6802,64 @@ name = "trin-execution"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-chains",
  "alloy-rlp",
  "alloy-rpc-types-engine",
  "anyhow",
+ "async-trait",
  "clap",
+ "dirs",
+ "discv5",
  "e2store",
  "eth_trie",
+ "ethereum_ssz",
+ "ethereum_ssz_derive",
  "ethportal-api",
+ "futures",
  "futures-util",
  "hashbrown 0.14.5",
+ "http 1.2.0",
  "humanize-duration",
  "jsonrpsee",
  "lazy_static",
+ "once_cell",
  "parking_lot 0.11.2",
+ "pin-project",
+ "portal-bridge",
+ "portalnet",
  "prometheus_exporter",
  "rand",
  "rayon",
+ "regex",
  "reqwest",
+ "reth-ipc",
  "revm",
  "revm-inspectors",
  "revm-primitives",
  "rocksdb",
+ "rpc",
  "serde",
+ "serde-this-or-that",
  "serde_json",
+ "sha3 0.9.1",
+ "tempfile",
  "test-log",
  "thiserror 1.0.69",
  "tokio",
+ "tower 0.4.13",
+ "tower-http",
  "tracing",
+ "tracing-subscriber 0.3.19",
  "tracing-test",
+ "tree_hash",
  "trin-evm",
+ "trin-history",
+ "trin-state",
+ "trin-storage",
  "trin-utils",
+ "trin-validation",
+ "url",
+ "utp-rs",
 ]
 
 [[package]]

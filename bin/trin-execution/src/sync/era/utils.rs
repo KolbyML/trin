@@ -13,8 +13,8 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 use super::types::ProcessedEra;
-use crate::era::{
-    beacon::ProcessBeaconBlock,
+use crate::sync::era::{
+    execution_payload::ProcessExecutionPayload,
     types::{EraType, ProcessedBlock, TransactionsWithSender},
 };
 
@@ -69,7 +69,7 @@ pub fn process_era_file(raw_era: Vec<u8>, epoch_index: u64) -> anyhow::Result<Pr
         // because the merge didn't occur yet the execution_payloads were empty. Hence we skip those
         // blocks.
         .filter(|block| block.execution_block_number() != 0)
-        .map(|block| block.process_beacon_block())
+        .map(|block| block.process_execution_payload())
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     info!("Done processing era file {epoch_index}");
@@ -101,4 +101,19 @@ pub async fn download_raw_era(era_path: String, http_client: Client) -> anyhow::
 
     info!("Done downloading era file {era_path}");
     Ok(raw_era1)
+}
+
+pub async fn download_range_from_file(
+    era_path: &str,
+    start_offset: usize,
+    end_offset: usize,
+    http_client: &Client,
+) -> anyhow::Result<Bytes> {
+    Ok(http_client
+        .get(era_path)
+        .header("Range", format!("bytes={start_offset}-{end_offset}",))
+        .send()
+        .await?
+        .bytes()
+        .await?)
 }

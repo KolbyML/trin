@@ -1,12 +1,12 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use discv5::enr::NodeId;
 use ethportal_api::{
-    jsonrpsee::http_client::HttpClient,
     types::{network::Subnetwork, portal_wire::OfferTrace},
     Enr,
 };
 use network::{Network, NetworkAction, NetworkInitializationConfig, NetworkManager};
+use rpc::PortalCensusRpc;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::{error, info, Instrument};
@@ -16,6 +16,7 @@ use crate::cli::BridgeConfig;
 mod network;
 mod peer;
 mod peers;
+pub mod rpc;
 mod scoring;
 
 /// The error that occured in [Census].
@@ -40,18 +41,18 @@ pub const ENR_OFFER_LIMIT: usize = 2;
 /// checking their liveness, updating their data radius, iterating through their
 /// rfn to find new peers, and providing interested enrs for a given content id.
 #[derive(Clone)]
-pub struct Census {
-    history: Network,
-    state: Network,
-    beacon: Network,
+pub struct Census<RpcClient: PortalCensusRpc> {
+    history: Network<RpcClient>,
+    state: Network<RpcClient>,
+    beacon: Network<RpcClient>,
     initialized: bool,
 }
 
-impl Census {
+impl<RpcClient: PortalCensusRpc> Census<RpcClient> {
     const SUPPORTED_SUBNETWORKS: [Subnetwork; 3] =
         [Subnetwork::Beacon, Subnetwork::History, Subnetwork::State];
 
-    pub fn new(client: HttpClient, bridge_config: &BridgeConfig) -> Self {
+    pub fn new(client: Arc<RpcClient>, bridge_config: &BridgeConfig) -> Self {
         Self {
             history: Network::new(client.clone(), Subnetwork::History, bridge_config),
             state: Network::new(client.clone(), Subnetwork::State, bridge_config),
@@ -101,7 +102,7 @@ impl Census {
     pub async fn init(
         &mut self,
         subnetworks: impl IntoIterator<Item = Subnetwork>,
-    ) -> Result<JoinHandle<()>, CensusError> {
+    ) -> Result<JoinHandle<anyhow::Result<()>>, CensusError> {
         info!("Initializing census");
 
         if self.initialized {
@@ -167,7 +168,9 @@ impl Census {
     }
 }
 
-async fn next_action(manager: &mut Option<NetworkManager>) -> Option<NetworkAction> {
+async fn next_action<RpcClient: PortalCensusRpc>(
+    manager: &mut Option<NetworkManager<RpcClient>>,
+) -> Option<NetworkAction> {
     match manager {
         Some(manager) => Some(manager.next_action().await),
         None => None,

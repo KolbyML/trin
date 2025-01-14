@@ -3,7 +3,10 @@ use std::{env, net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 use alloy::primitives::B256;
 use clap::Parser;
 use ethportal_api::{
-    types::{network::Subnetwork, portal_wire::NetworkSpec},
+    types::{
+        network::Subnetwork,
+        portal_wire::{NetworkSpec, MAINNET},
+    },
     Enr,
 };
 use portalnet::{
@@ -191,6 +194,36 @@ pub struct BridgeConfig {
         help = "The directory for storing trin-execution data, useful for storing state in non standard locations."
     )]
     pub data_dir: Option<PathBuf>,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        Self {
+            executable_path: PathBuf::from(DEFAULT_EXECUTABLE_PATH),
+            mode: BridgeMode::Latest,
+            epoch_acc_path: PathBuf::from(DEFAULT_EPOCH_ACC_PATH),
+            portal_subnetworks: vec![Subnetwork::History].into(),
+            network: MAINNET.clone(),
+            metrics_url: None,
+            client_metrics_url: None,
+            bootnodes: "default".to_string(),
+            external_ip: None,
+            private_key: B256::random(),
+            el_provider: Url::parse(DEFAULT_BASE_EL_ENDPOINT).unwrap(),
+            el_provider_fallback: Url::parse(FALLBACK_BASE_EL_ENDPOINT).unwrap(),
+            cl_provider: Url::parse(DEFAULT_BASE_CL_ENDPOINT).unwrap(),
+            cl_provider_fallback: Url::parse(FALLBACK_BASE_CL_ENDPOINT).unwrap(),
+            base_discovery_port: DEFAULT_DISCOVERY_PORT,
+            base_rpc_port: DEFAULT_WEB3_HTTP_PORT,
+            gossip_limit: DEFAULT_GOSSIP_LIMIT,
+            offer_limit: DEFAULT_OFFER_LIMIT,
+            enr_offer_limit: ENR_OFFER_LIMIT,
+            filter_clients: Vec::new(),
+            request_timeout: DEFAULT_TOTAL_REQUEST_TIMEOUT,
+            bridge_id: BridgeId { id: 1, total: 1 },
+            data_dir: None,
+        }
+    }
 }
 
 /// Used to identify the bridge amongst a set of bridges,

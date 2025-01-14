@@ -11,20 +11,23 @@ use hashbrown::{HashMap as BrownHashMap, HashSet};
 use parking_lot::Mutex;
 use prometheus_exporter::prometheus::HistogramTimer;
 use revm::{
-    db::{states::PlainStorageChangeset, BundleState, OriginalValuesKnown},
+    db::{
+        states::{PlainStateReverts, PlainStorageChangeset},
+        BundleState, OriginalValuesKnown,
+    },
     Database, DatabaseRef,
 };
 use revm_primitives::{AccountInfo, Bytecode, KECCAK_EMPTY};
 use rocksdb::DB as RocksDB;
 use tracing::info;
 
-use super::{account_db::AccountDB, execution_position::ExecutionPosition, trie_db::TrieRocksDB};
+use super::{account_db::AccountDB, trie_db::TrieRocksDB};
 use crate::{
     config::StateConfig,
     metrics::{
         start_timer_vec, stop_timer, BUNDLE_COMMIT_PROCESSING_TIMES, TRANSACTION_PROCESSING_TIMES,
     },
-    storage::error::EVMError,
+    storage::state::error::EVMError,
 };
 
 fn start_commit_timer(name: &str) -> HistogramTimer {
@@ -40,9 +43,9 @@ pub struct EvmDB {
     /// State config
     pub config: StateConfig,
     /// Storage cache for the accounts required for gossiping stat diffs, keyed by address hash.
-    storage_cache: Arc<Mutex<FbHashMap<32, HashSet<B256>>>>,
+    pub storage_cache: Arc<Mutex<FbHashMap<32, HashSet<B256>>>>,
     /// Cache for newly created contracts required for gossiping stat diffs, keyed by code hash.
-    newly_created_contracts: Arc<Mutex<FbHashMap<32, Bytecode>>>,
+    pub newly_created_contracts: Arc<Mutex<FbHashMap<32, Bytecode>>>,
     /// The underlying database.
     pub db: Arc<RocksDB>,
     /// To get proofs and to verify trie state.
@@ -50,24 +53,15 @@ pub struct EvmDB {
 }
 
 impl EvmDB {
-    pub fn new(
-        config: StateConfig,
-        db: Arc<RocksDB>,
-        execution_position: &ExecutionPosition,
-    ) -> anyhow::Result<Self> {
+    pub fn new(config: StateConfig, db: Arc<RocksDB>, state_root: B256) -> anyhow::Result<Self> {
         db.put(KECCAK_EMPTY, Bytecode::new().bytes().as_ref())?;
         db.put(B256::ZERO, Bytecode::new().bytes().as_ref())?;
 
-        let trie = Arc::new(Mutex::new(
-            if execution_position.state_root() == EMPTY_ROOT_HASH {
-                EthTrie::new(Arc::new(TrieRocksDB::new(false, db.clone())))
-            } else {
-                EthTrie::from(
-                    Arc::new(TrieRocksDB::new(false, db.clone())),
-                    execution_position.state_root(),
-                )?
-            },
-        ));
+        let trie = Arc::new(Mutex::new(if state_root == EMPTY_ROOT_HASH {
+            EthTrie::new(Arc::new(TrieRocksDB::new(false, db.clone())))
+        } else {
+            EthTrie::from(Arc::new(TrieRocksDB::new(false, db.clone())), state_root)?
+        }));
 
         let storage_cache = Arc::new(Mutex::new(FbHashMap::default()));
         let newly_created_contracts = Arc::new(Mutex::new(FbHashMap::default()));
@@ -285,10 +279,13 @@ impl EvmDB {
         Ok(())
     }
 
-    pub fn commit_bundle(&mut self, bundle_state: BundleState) -> anyhow::Result<()> {
+    pub fn commit_bundle(
+        &mut self,
+        bundle_state: BundleState,
+    ) -> anyhow::Result<PlainStateReverts> {
         // Currently we don't use reverts, so we can ignore them, but they are here for when we do.
         let timer = start_commit_timer("generate_plain_state_and_reverts");
-        let (plain_state, _reverts) =
+        let (plain_state, reverts) =
             bundle_state.into_plain_state_and_reverts(OriginalValuesKnown::Yes);
         stop_timer(timer);
 
@@ -327,7 +324,7 @@ impl EvmDB {
         self.commit_storage(plain_state.storage)?;
         stop_timer(timer);
 
-        Ok(())
+        Ok(reverts)
     }
 
     fn fetch_account(&self, address_hash: B256) -> anyhow::Result<Option<AccountState>> {

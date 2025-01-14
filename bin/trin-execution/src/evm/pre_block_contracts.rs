@@ -5,7 +5,7 @@ use revm::{db::State, DatabaseCommit, Evm};
 use revm_primitives::{SpecId, TxEnv, TxKind, U256};
 use trin_evm::spec_id::get_spec_id;
 
-use crate::storage::evm_db::EvmDB;
+use crate::storage::state::evm_db::EvmDB;
 
 /// Apply the beacon roots contract from eip-4788
 fn apply_beacon_root_contract(

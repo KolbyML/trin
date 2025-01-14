@@ -37,7 +37,7 @@ impl Transaction {
                 let (odd_y_parity, is_eip155) = if v < 35 {
                     (v - 27, false)
                 } else {
-                    (v - 37, true)
+                    (((v ^ 1) % 2 == 1) as u8, true)
                 };
                 (tx.r, tx.s, odd_y_parity, is_eip155)
             }
@@ -182,6 +182,7 @@ impl<'de> Deserialize<'de> for Transaction {
 ///
 /// The basic type differs in the way it encodes non-legacy transaction. The basic type doesn't have
 /// extra RLP wrapper around it, meaning it's just: `type + rlp(tx)`.
+#[derive(Eq, Debug, Clone, PartialEq)]
 pub struct TransactionWithRlpHeader(pub Transaction);
 
 impl Encodable for TransactionWithRlpHeader {

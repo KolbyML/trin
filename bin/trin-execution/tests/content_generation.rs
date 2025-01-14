@@ -1,13 +1,7 @@
 use alloy::rlp::Decodable;
 use anyhow::{ensure, Result};
 use eth_trie::{decode_node, node::Node, RootWithTrieDiff};
-use ethportal_api::{
-    types::{
-        content_value::state::{ContractBytecode, TrieNode},
-        state_trie::account_state::AccountState,
-    },
-    ContentValue, OverlayContentKey, StateContentKey, StateContentValue,
-};
+use ethportal_api::types::state_trie::account_state::AccountState;
 use revm_primitives::keccak256;
 use tracing::info;
 use tracing_test::traced_test;
@@ -17,64 +11,13 @@ use trin_execution::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
-    execution::TrinExecution,
+    subcommands::state_gossip_stats::Stats,
+    sync::syncer::Syncer,
     trie_walker::TrieWalker,
     types::block_to_trace::BlockToTrace,
     utils::full_nibble_path_to_address_hash,
 };
 use trin_utils::dir::create_temp_test_dir;
-
-#[derive(Default, Debug)]
-struct Stats {
-    content_count: usize,
-    gossip_size: usize,
-    storage_size: usize,
-    account_trie_count: usize,
-    contract_storage_trie_count: usize,
-    contract_bytecode_count: usize,
-}
-
-impl Stats {
-    /// Panics if either is `Err`
-    fn check_content(&mut self, key: &StateContentKey, value: &StateContentValue) {
-        let value_without_proof = match &value {
-            StateContentValue::AccountTrieNodeWithProof(account_trie_node_with_proof) => {
-                self.account_trie_count += 1;
-                StateContentValue::TrieNode(TrieNode {
-                    node: account_trie_node_with_proof
-                        .proof
-                        .last()
-                        .expect("Account trie proof must have at least one trie node")
-                        .clone(),
-                })
-            }
-            StateContentValue::ContractStorageTrieNodeWithProof(
-                contract_storage_trie_node_with_proof,
-            ) => {
-                self.contract_storage_trie_count += 1;
-                StateContentValue::TrieNode(TrieNode {
-                    node: contract_storage_trie_node_with_proof
-                        .storage_proof
-                        .last()
-                        .expect("Storage trie proof much have at least one trie node")
-                        .clone(),
-                })
-            }
-            StateContentValue::ContractBytecodeWithProof(contract_bytecode_with_proof) => {
-                self.contract_bytecode_count += 1;
-                StateContentValue::ContractBytecode(ContractBytecode {
-                    code: contract_bytecode_with_proof.code.clone(),
-                })
-            }
-            _ => panic!("Content value doesn't contain proof!"),
-        };
-        let gossip_size = key.to_bytes().len() + value.encode().len();
-        let storage_size = 32 + key.to_bytes().len() + value_without_proof.encode().len();
-        self.content_count += 1;
-        self.gossip_size += gossip_size;
-        self.storage_size += storage_size;
-    }
-}
 
 /// Tests that we can execute and generate content up to a specified block.
 ///
@@ -92,11 +35,12 @@ async fn test_we_can_generate_content_key_values_up_to_x() -> Result<()> {
     let blocks = std::env::var("BLOCKS")?.parse::<u64>()?;
 
     let temp_directory = create_temp_test_dir()?;
-    let mut trin_execution = TrinExecution::new(
+    let mut trin_execution = Syncer::new(
         temp_directory.path(),
         StateConfig {
             cache_contract_changes: true,
             block_to_trace: BlockToTrace::None,
+            save_blocks: false,
         },
     )
     .await?;

@@ -3,8 +3,8 @@ use tracing_test::traced_test;
 use trin_execution::{
     cli::{ExportStateConfig, ImportStateConfig},
     config::StateConfig,
-    execution::TrinExecution,
     subcommands::era2::{export::StateExporter, import::StateImporter},
+    sync::syncer::Syncer,
 };
 use trin_utils::dir::create_temp_test_dir;
 
@@ -37,7 +37,7 @@ async fn execute_export_import_execute() -> anyhow::Result<()> {
     let dir_2 = temp_directory.path().join("dir_2");
 
     // 1. execute blocks in dir_1
-    let mut trin_execution = TrinExecution::new(&dir_1, StateConfig::default()).await?;
+    let mut trin_execution = Syncer::new(&dir_1, StateConfig::default()).await?;
     trin_execution
         .process_range_of_blocks(blocks, /* stop_signal= */ None)
         .await?;
@@ -67,7 +67,7 @@ async fn execute_export_import_execute() -> anyhow::Result<()> {
     drop(importer);
 
     // 4. execute blocks in dir_2
-    let mut trin_execution = TrinExecution::new(&dir_2, StateConfig::default()).await?;
+    let mut trin_execution = Syncer::new(&dir_2, StateConfig::default()).await?;
     trin_execution
         .process_range_of_blocks(2 * blocks, /* stop_signal= */ None)
         .await?;

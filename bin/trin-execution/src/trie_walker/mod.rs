@@ -185,8 +185,8 @@ mod tests {
     use super::*;
     use crate::{
         config::StateConfig,
-        execution::TrinExecution,
-        storage::{trie_db::TrieRocksDB, utils::setup_rocksdb},
+        storage::{state::trie_db::TrieRocksDB, utils::setup_rocksdb},
+        sync::syncer::Syncer,
         utils::full_nibble_path_to_address_hash,
     };
 
@@ -239,7 +239,7 @@ mod tests {
     #[ignore = "This test downloads data from a remote server"]
     async fn test_trie_walker_builds_valid_proof() {
         let temp_directory = create_temp_test_dir().unwrap();
-        let mut trin_execution = TrinExecution::new(temp_directory.path(), StateConfig::default())
+        let mut trin_execution = Syncer::new(temp_directory.path(), StateConfig::default())
             .await
             .unwrap();
         let RootWithTrieDiff { trie_diff, .. } = trin_execution.process_next_block().await.unwrap();
