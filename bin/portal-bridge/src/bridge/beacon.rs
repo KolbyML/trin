@@ -47,7 +47,7 @@ use trin_metrics::bridge::BridgeMetricsReporter;
 use super::{constants::SERVE_BLOCK_TIMEOUT, offer_report::OfferReport};
 use crate::{
     api::consensus::ConsensusApi,
-    census::Census,
+    census::{rpc::CensusHttpClient, Census},
     constants::BEACON_GENESIS_TIME,
     types::mode::BridgeMode,
     utils::{
@@ -97,7 +97,7 @@ pub struct BeaconBridge {
     portal_client: HttpClient,
     metrics: BridgeMetricsReporter,
     /// Used to request all interested enrs in the network.
-    census: Census,
+    census: Census<CensusHttpClient>,
 }
 
 impl BeaconBridge {
@@ -105,7 +105,7 @@ impl BeaconBridge {
         consensus_api: ConsensusApi,
         mode: BridgeMode,
         portal_client: HttpClient,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> Self {
         let metrics = BridgeMetricsReporter::new("beacon".to_string(), &format!("{mode:?}"));
         Self {
@@ -277,7 +277,7 @@ impl BeaconBridge {
         portal_client: HttpClient,
         finalized_bootstrap: Arc<Mutex<FinalizedBootstrap>>,
         metrics: BridgeMetricsReporter,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> anyhow::Result<()> {
         if finalized_bootstrap.lock().await.in_progress {
             // If the `LightClientBootstrap` generation is in progress, do not serve a new
@@ -334,7 +334,7 @@ impl BeaconBridge {
         portal_client: HttpClient,
         current_period: Arc<Mutex<u64>>,
         metrics: BridgeMetricsReporter,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> anyhow::Result<()> {
         let now = SystemTime::now();
         let expected_current_period =
@@ -401,7 +401,7 @@ impl BeaconBridge {
         consensus_api: ConsensusApi,
         portal_client: HttpClient,
         metrics: BridgeMetricsReporter,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> anyhow::Result<()> {
         let data = consensus_api.get_lc_optimistic_update().await?;
         let update: Value = serde_json::from_str(&data)?;
@@ -425,7 +425,7 @@ impl BeaconBridge {
         portal_client: HttpClient,
         finalized_slot: Arc<Mutex<u64>>,
         metrics: BridgeMetricsReporter,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> anyhow::Result<()> {
         let data = consensus_api.get_lc_finality_update().await?;
         let update: Value = serde_json::from_str(&data)?;
@@ -469,7 +469,7 @@ impl BeaconBridge {
         portal_client: HttpClient,
         metrics: BridgeMetricsReporter,
         finalized_state_root: Arc<Mutex<FinalizedBeaconState>>,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> anyhow::Result<()> {
         if finalized_state_root.lock().await.in_progress {
             // If the beacon state download is in progress, do not serve a new historical summary.
@@ -538,7 +538,7 @@ impl BeaconBridge {
         content_key: BeaconContentKey,
         content_value: BeaconContentValue,
         metrics: BridgeMetricsReporter,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) {
         let Ok(enrs) = census.select_peers(Subnetwork::Beacon, &content_key.content_id()) else {
             error!("Failed to request enrs for content key, skipping offer: {content_key:?}");

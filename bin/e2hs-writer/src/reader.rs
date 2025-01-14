@@ -21,7 +21,7 @@ use portal_bridge::api::execution::ExecutionApi;
 use ssz_types::{typenum, FixedVector, VariableList};
 use tokio::try_join;
 use tree_hash::TreeHash;
-use trin_execution::era::beacon::decode_transactions;
+use trin_execution::sync::era::execution_payload::decode_transactions;
 use trin_validation::{
     accumulator::PreMergeAccumulator,
     constants::{CANCUN_BLOCK_NUMBER, EPOCH_SIZE, MERGE_BLOCK_NUMBER, SHANGHAI_BLOCK_NUMBER},

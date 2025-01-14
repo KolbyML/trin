@@ -17,7 +17,7 @@ use ethportal_api::{
     utils::bytes::hex_encode,
 };
 use ssz::Decode;
-use trin_execution::era::beacon::EMPTY_UNCLE_ROOT_HASH;
+use trin_execution::sync::era::execution_payload::EMPTY_UNCLE_ROOT_HASH;
 use trin_validation::accumulator::PreMergeAccumulator;
 
 pub fn pre_capella_execution_payload_to_header(

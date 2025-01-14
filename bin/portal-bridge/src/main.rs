@@ -5,8 +5,8 @@ use ethportal_api::{
 };
 use portal_bridge::{
     api::consensus::ConsensusApi,
-    bridge::{beacon::BeaconBridge, e2hs::E2HSBridge, state::StateBridge},
-    census::Census,
+    bridge::{beacon::BeaconBridge, e2hs::E2HSBridge},
+    census::{rpc::CensusHttpClient, Census},
     cli::BridgeConfig,
     handle::build_trin,
     types::mode::BridgeMode,
@@ -42,7 +42,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let census_handle = match bridge_config.portal_subnetwork {
         Subnetwork::Beacon => {
             // Create and initialize the census to acquire critical view of network before gossiping
-            let mut census = Census::new(portal_client.clone(), &bridge_config);
+            let mut census = Census::new(
+                CensusHttpClient::new(portal_client.clone()).into(),
+                &bridge_config,
+            );
             let census_handle = census.init([Subnetwork::Beacon]).await?;
 
             let bridge_mode = bridge_config.mode.clone();
@@ -70,7 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     // Create and initialize the census to acquire critical view of network before
                     // gossiping
-                    let mut census = Census::new(portal_client.clone(), &bridge_config);
+                    let mut census = Census::new(
+                        CensusHttpClient::new(portal_client.clone()).into(),
+                        &bridge_config,
+                    );
                     let census_handle = census.init([Subnetwork::History]).await?;
 
                     let e2hs_bridge = E2HSBridge::new(
@@ -89,27 +95,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => panic!("Unsupported bridge mode for History network"),
             }
-        }
-        Subnetwork::State => {
-            // Create and initialize the census to acquire critical view of network before gossiping
-            let mut census = Census::new(portal_client.clone(), &bridge_config);
-            let census_handle = census.init([Subnetwork::State]).await?;
-
-            let state_bridge = StateBridge::new(
-                bridge_config.mode.clone(),
-                portal_client.clone(),
-                bridge_config.offer_limit,
-                census,
-                bridge_config.bridge_id,
-                bridge_config.data_dir,
-            )
-            .await?;
-
-            state_bridge
-                .launch()
-                .instrument(tracing::trace_span!("state"))
-                .await;
-            census_handle
         }
         _ => {
             panic!(

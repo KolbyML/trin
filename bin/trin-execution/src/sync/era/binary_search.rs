@@ -8,7 +8,10 @@ use reqwest::Client;
 use revm_primitives::SpecId;
 use trin_evm::spec_id::get_spec_block_number;
 
-use super::{constants::FIRST_ERA_EPOCH_WITH_EXECUTION_PAYLOAD, utils::download_raw_era};
+use super::{
+    constants::FIRST_ERA_EPOCH_WITH_EXECUTION_PAYLOAD,
+    utils::{download_range_from_file, download_raw_era},
+};
 
 pub struct EraBinarySearch {}
 
@@ -40,7 +43,7 @@ impl EraBinarySearch {
             let mid_block = EraBinarySearch::download_first_beacon_block_from_era(
                 mid,
                 era_links[&mid].clone(),
-                http_client.clone(),
+                &http_client,
             )
             .await?;
             let mid_block_number = mid_block.block.execution_block_number();
@@ -62,7 +65,7 @@ impl EraBinarySearch {
             let mid_plus_one_block = EraBinarySearch::download_first_beacon_block_from_era(
                 mid + 1,
                 era_links[&(mid + 1)].clone(),
-                http_client.clone(),
+                &http_client,
             )
             .await?;
             let mid_plus_one_block_number = mid_plus_one_block.block.execution_block_number();
@@ -96,26 +99,18 @@ impl EraBinarySearch {
     async fn download_first_beacon_block_from_era(
         era_index: u64,
         era_path: String,
-        http_client: Client,
+        http_client: &Client,
     ) -> anyhow::Result<CompressedSignedBeaconBlock> {
         // download first compressed beacon block in era file
-        let e2store_header = http_client
-            .get(&era_path)
-            .header("Range", "bytes=8-15")
-            .send()
-            .await?
-            .bytes()
-            .await
-            .expect("to be able to download e2store header");
+        let e2store_header = download_range_from_file(&era_path, 8, 15, http_client).await?;
         let e2store_header = E2StoreHeader::deserialize(&e2store_header)?;
-        let compressed_beacon_block = http_client
-            .get(&era_path)
-            .header("Range", format!("bytes=8-{}", 15 + e2store_header.length))
-            .send()
-            .await?
-            .bytes()
-            .await
-            .expect("to be able to download compressed beacon block");
+        let compressed_beacon_block = download_range_from_file(
+            &era_path,
+            8,
+            15 + e2store_header.length as usize,
+            http_client,
+        )
+        .await?;
         let entry = Entry::deserialize(&compressed_beacon_block)?;
 
         let slot_index = Self::start_slot_index(era_index);

@@ -12,7 +12,7 @@ use reqwest::{
     Client,
 };
 use tracing::info;
-use trin_execution::era::binary_search::EraBinarySearch;
+use trin_execution::sync::era::binary_search::EraBinarySearch;
 use trin_validation::constants::{EPOCH_SIZE, MERGE_BLOCK_NUMBER};
 
 pub enum EraSource {

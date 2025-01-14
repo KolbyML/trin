@@ -7,6 +7,7 @@ pub struct StateConfig {
     /// created contracts.
     pub cache_contract_changes: bool,
     pub block_to_trace: BlockToTrace,
+    pub save_blocks: bool,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -15,6 +16,7 @@ impl Default for StateConfig {
         Self {
             cache_contract_changes: false,
             block_to_trace: BlockToTrace::None,
+            save_blocks: false,
         }
     }
 }
@@ -24,6 +26,7 @@ impl From<TrinExecutionConfig> for StateConfig {
         Self {
             cache_contract_changes: false,
             block_to_trace: cli_config.block_to_trace,
+            save_blocks: cli_config.save_blocks,
         }
     }
 }

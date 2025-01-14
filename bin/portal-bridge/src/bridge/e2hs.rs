@@ -44,7 +44,7 @@ use trin_validation::header_validator::HeaderValidator;
 use super::offer_report::{GlobalOfferReport, OfferReport};
 use crate::{
     bridge::constants::{HEADER_SATURATION_DELAY, SERVE_BLOCK_TIMEOUT},
-    census::Census,
+    census::{rpc::CensusHttpClient, Census},
     types::range::block_range_to_epochs,
 };
 
@@ -72,7 +72,7 @@ impl E2HSBridge {
         offer_limit: usize,
         block_range: BlockRange,
         random_fill: bool,
-        census: Census,
+        census: Census<CensusHttpClient>,
     ) -> anyhow::Result<Self> {
         let offer_semaphore = Arc::new(Semaphore::new(offer_limit));
         let block_semaphore = Arc::new(Semaphore::new(offer_limit));
@@ -229,7 +229,7 @@ impl E2HSBridge {
 #[derive(Clone)]
 struct Gossiper {
     /// Used to request all interested enrs in the network.
-    census: Census,
+    census: Census<CensusHttpClient>,
     /// Used to send RPC request to trin
     portal_client: HttpClient,
     /// Records and reports bridge metrics

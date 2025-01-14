@@ -8,7 +8,7 @@ use ethportal_api::{
 use portal_bridge::{
     api::consensus::ConsensusApi,
     bridge::beacon::BeaconBridge,
-    census::{Census, ENR_OFFER_LIMIT},
+    census::{rpc::CensusHttpClient, Census, ENR_OFFER_LIMIT},
     cli::{BridgeConfig, BridgeId, DEFAULT_EXECUTABLE_PATH, DEFAULT_SUBNETWORK},
     constants::{DEFAULT_OFFER_LIMIT, DEFAULT_TOTAL_REQUEST_TIMEOUT},
     types::mode::BridgeMode,
@@ -69,7 +69,10 @@ pub async fn test_beacon_bridge(peertest: &Peertest, portal_client: &HttpClient)
         data_dir: None,
     };
 
-    let mut census = Census::new(portal_client.clone(), &bridge_config);
+    let mut census = Census::new(
+        CensusHttpClient::new(portal_client.clone()).into(),
+        &bridge_config,
+    );
     let census_handle = census.init([Subnetwork::Beacon]).await.unwrap();
     let bridge = BeaconBridge::new(consensus_api, mode, portal_client.clone(), census);
     bridge.launch().await;

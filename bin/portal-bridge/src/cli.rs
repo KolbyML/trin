@@ -3,7 +3,10 @@ use std::{env, net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 use alloy::primitives::B256;
 use clap::Parser;
 use ethportal_api::{
-    types::{network::Subnetwork, network_spec::NetworkSpec},
+    types::{
+        network::Subnetwork,
+        network_spec::{NetworkSpec, MAINNET},
+    },
     Enr,
 };
 use portalnet::{
@@ -189,6 +192,38 @@ pub struct BridgeConfig {
         help = "The directory for storing trin-execution data, useful for storing state in non standard locations."
     )]
     pub data_dir: Option<PathBuf>,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        Self {
+            executable_path: PathBuf::from(DEFAULT_EXECUTABLE_PATH),
+            mode: BridgeMode::Latest,
+            network: MAINNET.clone(),
+            metrics_url: None,
+            portal_subnetwork: Subnetwork::History,
+            client_metrics_url: None,
+            bootnodes: "default".to_string(),
+            external_ip: None,
+            private_key: B256::random(),
+            el_provider: Url::parse(DEFAULT_BASE_EL_ENDPOINT).expect("Invalid default EL provider"),
+            el_provider_fallback: Url::parse(FALLBACK_BASE_EL_ENDPOINT)
+                .expect("Invalid default EL provider fallback"),
+            cl_provider: Url::parse(DEFAULT_BASE_CL_ENDPOINT).expect("Invalid default CL provider"),
+            cl_provider_fallback: Url::parse(FALLBACK_BASE_CL_ENDPOINT)
+                .expect("Invalid default CL provider fallback"),
+            base_discovery_port: DEFAULT_DISCOVERY_PORT,
+            base_rpc_port: DEFAULT_WEB3_HTTP_PORT,
+            offer_limit: DEFAULT_OFFER_LIMIT,
+            enr_offer_limit: ENR_OFFER_LIMIT,
+            filter_clients: Vec::new(),
+            request_timeout: DEFAULT_TOTAL_REQUEST_TIMEOUT,
+            bridge_id: BridgeId { id: 1, total: 1 },
+            data_dir: None,
+            e2hs_range: None,
+            e2hs_randomize: false,
+        }
+    }
 }
 
 /// Used to identify the bridge amongst a set of bridges,

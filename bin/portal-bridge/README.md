@@ -34,12 +34,6 @@ cargo run -p portal-bridge --release -- --executable-path ./target/debug/trin
 - `"--mode latest"`: follow the head of the chain and gossip latest blocks
 - `"--mode test:/path/to/test_data.json"`: gossip content keys & values found in test file.
 
-#### State Subnetwork
-
-- `"--mode single:r50-100"`: backfill, gossips state diffs for blocks in #50-#100 range (inclusive)
-- `"--mode snapshot:1000000"`: gossips a state snapshot at the respective block, in this example the state snapshot at block 1,000,000 will be gossiped. This mode is only used for the State Network.
-
-
 ### Subnetwork configuration
 
 You can specify the `--portal-subnetwork` flag for which network to run the bridge for
