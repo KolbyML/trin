@@ -38,7 +38,7 @@ use crate::{
         create_account_content_key, create_account_content_value, create_contract_content_key,
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
-    storage::evm_db::{self, EvmDB},
+    storage::state::evm_db::{self, EvmDB},
     sync::syncer::Syncer,
     trie_walker::TrieWalker,
     types::trie_proof::TrieProof,

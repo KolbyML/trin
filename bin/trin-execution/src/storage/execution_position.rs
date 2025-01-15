@@ -130,6 +130,10 @@ impl ExecutionPositionV2 {
         self.next_block_number
     }
 
+    pub fn previous_block_number(&self) -> u64 {
+        self.next_block_number.saturating_sub(1)
+    }
+
     pub fn latest_block_number(&self) -> u64 {
         self.latest_block_number
     }

@@ -32,7 +32,7 @@ use crate::{
         set_int_gauge_vec, start_timer_vec, stop_timer, BLOCK_HEIGHT, BLOCK_PROCESSING_TIMES,
         TRANSACTION_PROCESSING_TIMES,
     },
-    storage::evm_db::EvmDB,
+    storage::state::evm_db::EvmDB,
     subcommands::era2::import,
     sync::era::types::{ProcessedBlock, TransactionsWithSender},
 };
@@ -56,10 +56,12 @@ pub struct BlockExecutor<'a> {
     cumulative_gas_used: u64,
     /// Save reverts of state changes.
     _save_reverts: bool,
+    /// Save blocks
+    save_blocks: bool,
 }
 
 impl<'a> BlockExecutor<'a> {
-    pub fn new(database: EvmDB, _save_reverts: bool) -> Self {
+    pub fn new(database: EvmDB, _save_reverts: bool, save_blocks: bool) -> Self {
         let state_database = State::builder()
             .with_database(database)
             .with_bundle_update()
@@ -72,6 +74,7 @@ impl<'a> BlockExecutor<'a> {
             executed_blocks: 0,
             cumulative_gas_used: 0,
             _save_reverts,
+            save_blocks,
         }
     }
 
@@ -126,7 +129,7 @@ impl<'a> BlockExecutor<'a> {
         let genesis: Genesis =
             serde_json::from_str(include_str!("../../resources/genesis/mainnet.json"))?;
 
-        import_genesis(&mut self.evm.db_mut().database, &genesis)?;
+        import_genesis(&mut self.evm.db_mut().database, &genesis, self.save_blocks)?;
 
         Ok(())
     }

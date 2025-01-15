@@ -13,8 +13,7 @@ pub struct ChainSpec {
 impl From<Genesis> for ChainSpec {
     fn from(genesis: Genesis) -> Self {
         Self {
-            // if we are importing a genesis file we assume the chain isn't mainnet
-            chain: Chain::from_id(4444),
+            chain: genesis.config.chain_id.into(),
             genesis,
         }
     }

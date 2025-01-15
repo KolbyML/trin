@@ -13,11 +13,13 @@ use url::Url;
 
 use crate::{
     chain_spec::{ChainSpec, MAINNET},
+    rpc::{RpcNamespace, RpcNamespaces},
     types::block_to_trace::BlockToTrace,
 };
 
 pub const APP_NAME: &str = "trin-execution";
 const DEFAULT_RPC_AUTHENTICATION_PORT: u16 = 8551;
+const DEFAULT_HTTP_PORT: u16 = 8545;
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "Trin Execution", about = "Executing blocks with no devp2p")]
@@ -53,6 +55,33 @@ pub struct TrinExecutionConfig {
         help = "Enable prometheus metrics reporting (provide local IP/Port from which your Prometheus server is configured to fetch metrics)"
     )]
     pub enable_metrics_with_url: Option<SocketAddr>,
+
+    #[arg(long = "http", help = "Used to enable HTTP rpc.")]
+    pub http: bool,
+
+    #[arg(
+        long = "http.addr",
+        help = "Address used for authentication for the engine api RPC server",
+        default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST),
+        requires = "http"
+    )]
+    pub http_address: IpAddr,
+
+    #[arg(
+        long = "http.port",
+        help = "Port used for authentication for the engine api RPC server",
+        default_value_t = DEFAULT_HTTP_PORT,
+        requires = "http"
+    )]
+    pub http_port: u16,
+
+    #[arg(
+        long = "http.api",
+        help = "Namespaces enabled for the HTTP API",
+        default_value = "eth",
+        requires = "http"
+    )]
+    pub http_enabled_namespaces: RpcNamespaces,
 
     #[arg(
         long = "authrpc.addr",
@@ -99,6 +128,9 @@ pub struct TrinExecutionConfig {
         default_value = "1/1"
     )]
     pub bridge_id: BridgeId,
+
+    #[arg(long = "save-blocks", help = "Save blocks to disk")]
+    pub save_blocks: bool,
 
     #[arg(
         help = "The chain Trin Execution is running on (mainnet, testnet, etc.) or a path to a genesis file",

@@ -39,6 +39,7 @@ async fn test_we_can_generate_content_key_values_up_to_x2() -> Result<()> {
         StateConfig {
             cache_contract_changes: true,
             block_to_trace: BlockToTrace::None,
+            save_blocks: false,
         },
     )
     .await?;

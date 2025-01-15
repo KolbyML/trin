@@ -19,7 +19,7 @@ use crate::{
     config::StateConfig,
     evm::block_executor::BlockExecutor,
     metrics::{start_timer_vec, stop_timer, BLOCK_PROCESSING_TIMES},
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2},
+    storage::{execution_position::ExecutionPositionV2, state::evm_db::EvmDB},
     sync::era::types::SyncStatus,
 };
 
@@ -73,7 +73,8 @@ impl BlockingSyncer {
             info!("Debug option is set to sync until block {debug_last_block:?}");
         }
 
-        let mut block_executor = BlockExecutor::new(self.database.clone(), false);
+        let mut block_executor =
+            BlockExecutor::new(self.database.clone(), false, self.config.save_blocks);
 
         let mut block = match self.fetch_next_block()? {
             SyncStatus::Block(processed_block) => processed_block,
@@ -163,7 +164,8 @@ impl BlockingSyncer {
                     }
                 }
 
-                block_executor = BlockExecutor::new(self.database.clone(), false);
+                block_executor =
+                    BlockExecutor::new(self.database.clone(), false, self.config.save_blocks);
             }
 
             block = match next_block {

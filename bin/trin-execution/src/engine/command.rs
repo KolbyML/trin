@@ -1,4 +1,6 @@
-use alloy_rpc_types_engine::{ForkchoiceState, ForkchoiceUpdated, PayloadStatus};
+use alloy_rpc_types_engine::{
+    ForkchoiceState, ForkchoiceUpdated, PayloadAttributes, PayloadStatus,
+};
 use revm_primitives::B256;
 use tokio::sync::oneshot::Sender;
 
@@ -14,8 +16,19 @@ pub struct NewPayloadMessage {
 }
 
 pub enum EngineCommand {
-    NewPayload(NewPayloadMessage),
-    ForkChoice((ForkchoiceState, Sender<anyhow::Result<ForkchoiceUpdated>>)),
+    NewPayloadV1(NewPayloadMessage),
+    NewPayloadV2(NewPayloadMessage),
+    NewPayloadV3(NewPayloadMessage),
+    GetPayloadV1(NewPayloadMessage),
+    GetPayloadV2(NewPayloadMessage),
+    GetPayloadV3(NewPayloadMessage),
+    ForkChoice(
+        (
+            ForkchoiceState,
+            Option<PayloadAttributes>,
+            Sender<anyhow::Result<ForkchoiceUpdated>>,
+        ),
+    ),
 }
 
 impl EngineCommand {
@@ -24,7 +37,7 @@ impl EngineCommand {
         expected_blob_versioned_hashes: Option<Vec<B256>>,
         sender: Sender<anyhow::Result<PayloadStatus>>,
     ) -> Self {
-        Self::NewPayload(NewPayloadMessage {
+        Self::NewPayloadV1(NewPayloadMessage {
             processed_block,
             expected_blob_versioned_hashes,
             sender,
@@ -33,8 +46,9 @@ impl EngineCommand {
 
     pub fn fork_choice(
         forkchoice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
         sender: Sender<anyhow::Result<ForkchoiceUpdated>>,
     ) -> Self {
-        Self::ForkChoice((forkchoice_state, sender))
+        Self::ForkChoice((forkchoice_state, payload_attributes, sender))
     }
 }

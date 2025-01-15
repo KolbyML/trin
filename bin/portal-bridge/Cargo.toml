@@ -49,7 +49,6 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 trin-evm.workspace = true
-trin-execution.workspace = true
 trin-metrics.workspace = true
 trin-utils.workspace = true
 trin-validation.workspace = true

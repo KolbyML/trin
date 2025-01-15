@@ -7,8 +7,6 @@ use std::{fs, path::PathBuf, sync::Arc};
 use ethportal_api::types::cli::Web3TransportType;
 use ethportal_api::{
     types::{
-        bootnodes::Bootnodes,
-        cli::{StorageCapacityConfig, DEFAULT_DISCOVERY_PORT, DEFAULT_UTP_TRANSFER_LIMIT},
         network::{Network, Subnetwork},
         portal_wire::MAINNET,
     },
@@ -16,7 +14,9 @@ use ethportal_api::{
     version::get_trin_version,
 };
 use portalnet::{
+    bootnodes::Bootnodes,
     config::{PortalnetConfig, NODE_ADDR_CACHE_CAPACITY},
+    constants::{DEFAULT_DISCOVERY_PORT, DEFAULT_UTP_TRANSFER_LIMIT},
     discovery::{Discovery, Discv5UdpSocket},
     events::PortalnetEvents,
     utils::db::configure_node_data_dir,
@@ -26,7 +26,7 @@ use tracing::info;
 use tree_hash::TreeHash;
 use trin_history::initialize_history_network;
 use trin_state::initialize_state_network;
-use trin_storage::PortalStorageConfigFactory;
+use trin_storage::{config::StorageCapacityConfig, PortalStorageConfigFactory};
 use trin_validation::oracle::HeaderOracle;
 use utp_rs::socket::UtpSocket;
 

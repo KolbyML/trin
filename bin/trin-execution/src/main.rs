@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use alloy_chains::Chain;
 use clap::Parser;
 use tracing::info;
 use trin_execution::{
     cli::{TrinExecutionConfig, TrinExecutionSubCommands, APP_NAME},
     engine::{service::EngineService, thread_manager::ThreadManager, utils::initialize_database},
-    rpc::engine::EngineAuthServer,
+    rpc::{engine::EngineAuthServer, RpcServer},
+    storage::block::BlockStorage,
     subcommands::{
         era2::{export::StateExporter, import::StateImporter},
         init::InitState,
@@ -55,7 +58,10 @@ async fn main() -> anyhow::Result<()> {
             }
             TrinExecutionSubCommands::Init => {
                 let mut init_state = InitState::new(&data_dir)?;
-                init_state.run(trin_execution_config.chain)?;
+                init_state.run(
+                    trin_execution_config.chain,
+                    trin_execution_config.save_blocks,
+                )?;
             }
             TrinExecutionSubCommands::Import(_) => {
                 // Do nothing
@@ -76,25 +82,45 @@ async fn main() -> anyhow::Result<()> {
     let engine_tx = EngineService::spawn(
         &data_dir,
         execution_position.clone(),
-        db,
+        db.clone(),
         evm_db,
         trin_execution_config.clone(),
         &mut thread_manager,
     )
     .await;
 
+    let block_storage = Arc::new(BlockStorage::new(db.clone()));
+
+    // Start the Engine API server
     let engine_api_rpc_handle = EngineAuthServer::start(
         engine_tx,
-        execution_position,
+        execution_position.clone(),
         &data_dir,
         trin_execution_config.clone(),
     )
     .await?;
 
+    // Start API server
+    let api_handle = if trin_execution_config.http {
+        Some(
+            RpcServer::start(
+                execution_position,
+                trin_execution_config.clone(),
+                block_storage,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+
     let join_handle = tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
         info!("Received SIGINT, shutting down");
         let _ = engine_api_rpc_handle.stop();
+        if let Some(api_handle) = api_handle {
+            let _ = api_handle.stop();
+        }
 
         // Wait for all threads to finish
         thread_manager.shutdown_services().await;

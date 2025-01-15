@@ -14,7 +14,9 @@ use crate::{
     config::StateConfig,
     evm::{block_executor::BLOCKHASH_SERVE_WINDOW, genesis::import_genesis},
     storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV2,
+        block::BlockStorage,
+        execution_position::ExecutionPositionV2,
+        state::{account_db::AccountDB, evm_db::EvmDB},
         utils::setup_rocksdb,
     },
     subcommands::era2::utils::percentage_from_address_hash,
@@ -23,6 +25,7 @@ use crate::{
 
 pub struct InitState {
     evm_db: EvmDB,
+    execution_position: Arc<Mutex<ExecutionPositionV2>>,
 }
 
 impl InitState {
@@ -39,15 +42,22 @@ impl InitState {
 
         let evm_db = EvmDB::new(
             StateConfig::default(),
-            rocks_db,
+            rocks_db.clone(),
             execution_position.lock().state_root(),
         )
         .expect("Failed to create EVM database");
 
-        Ok(Self { evm_db })
+        Ok(Self {
+            evm_db,
+            execution_position,
+        })
     }
 
-    pub fn run(&mut self, chain_spec: Arc<ChainSpec>) -> anyhow::Result<()> {
-        import_genesis(&mut self.evm_db, &chain_spec.genesis)
+    pub fn run(&mut self, chain_spec: Arc<ChainSpec>, save_blocks: bool) -> anyhow::Result<()> {
+        let header = import_genesis(&mut self.evm_db, &chain_spec.genesis, save_blocks)?;
+        self.execution_position
+            .lock()
+            .update_position(self.evm_db.db.clone(), &header)?;
+        Ok(())
     }
 }

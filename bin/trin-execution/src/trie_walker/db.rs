@@ -3,7 +3,7 @@ use anyhow::anyhow;
 use eth_trie::DB;
 use hashbrown::HashMap;
 
-use crate::storage::{account_db::AccountDB, trie_db::TrieRocksDB};
+use crate::storage::state::{account_db::AccountDB, trie_db::TrieRocksDB};
 
 pub trait TrieWalkerDb {
     fn get(&self, key: &[u8]) -> anyhow::Result<Option<Bytes>>;

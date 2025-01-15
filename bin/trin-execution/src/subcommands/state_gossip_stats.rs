@@ -23,7 +23,8 @@ use crate::{
         create_contract_content_value, create_storage_content_key, create_storage_content_value,
     },
     storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV2,
+        execution_position::ExecutionPositionV2,
+        state::{account_db::AccountDB, evm_db::EvmDB},
         utils::setup_rocksdb,
     },
     trie_walker::TrieWalker,

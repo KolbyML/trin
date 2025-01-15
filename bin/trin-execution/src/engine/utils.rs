@@ -5,7 +5,9 @@ use tokio::sync::Mutex;
 
 use crate::{
     config::StateConfig,
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2, utils::setup_rocksdb},
+    storage::{
+        execution_position::ExecutionPositionV2, state::evm_db::EvmDB, utils::setup_rocksdb,
+    },
 };
 
 pub async fn initialize_database(

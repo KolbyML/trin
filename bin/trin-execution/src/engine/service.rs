@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use alloy_rpc_types_engine::{
-    ForkchoiceState, ForkchoiceUpdated, PayloadStatus, PayloadStatusEnum,
+    ForkchoiceState, ForkchoiceUpdated, PayloadAttributes, PayloadStatus, PayloadStatusEnum,
 };
 use ethportal_api::types::network::Subnetwork;
 use portal_bridge::{
@@ -25,7 +25,7 @@ use crate::{
     cli::TrinExecutionConfig,
     engine::command::EngineCommand,
     networking::trin::run_trin,
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2},
+    storage::{execution_position::ExecutionPositionV2, state::evm_db::EvmDB},
     sync::{block::service::BlockService, blocking_syncer::BlockingSyncer, service::SyncService},
 };
 
@@ -158,8 +158,13 @@ impl EngineService {
                 }
                 Some(command) = self.command_rx.recv() => {
                     match command {
-                        EngineCommand::NewPayload(new_payload_message) => self.handle_new_payload(new_payload_message).await,
-                        EngineCommand::ForkChoice((fork_choice_state, response_tx)) =>  self.handle_fork_choice(fork_choice_state, response_tx).await,
+                        EngineCommand::NewPayloadV1(new_payload_message) => self.handle_new_payload(new_payload_message).await,
+                        EngineCommand::ForkChoice((fork_choice_state,payload_attributes,response_tx)) => self.handle_fork_choice(fork_choice_state,payload_attributes,response_tx).await,
+                        EngineCommand::NewPayloadV2(new_payload_message) => todo!(),
+                        EngineCommand::NewPayloadV3(new_payload_message) => todo!(),
+                        EngineCommand::GetPayloadV1(new_payload_message) => todo!(),
+                        EngineCommand::GetPayloadV2(new_payload_message) => todo!(),
+                        EngineCommand::GetPayloadV3(new_payload_message) => todo!(),
                     }
                 }
             }
@@ -184,6 +189,7 @@ impl EngineService {
     pub async fn handle_fork_choice(
         &mut self,
         fork_choice_state: ForkchoiceState,
+        _payload_attributes: Option<PayloadAttributes>,
         response_tx: Sender<anyhow::Result<ForkchoiceUpdated>>,
     ) {
         // update execution position with the new fork choice state.

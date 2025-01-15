@@ -1,12 +1,11 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure};
 use discv5::enr::NodeId;
 use ethportal_api::{
     generate_random_node_ids,
-    jsonrpsee::http_client::HttpClient,
     types::{distance::Distance, network::Subnetwork, portal::PongInfo, portal_wire::OfferTrace},
-    BeaconNetworkApiClient, Enr, HistoryNetworkApiClient, StateNetworkApiClient,
+    Enr,
 };
 use futures::{future::JoinAll, StreamExt};
 use itertools::Itertools;
@@ -18,6 +17,7 @@ use tracing::{debug, error, info, warn};
 
 use super::{
     peers::Peers,
+    rpc::PortalCensusRpc,
     scoring::{AdditiveWeight, PeerSelector},
 };
 use crate::{
@@ -70,15 +70,19 @@ impl Default for NetworkInitializationConfig {
 /// The [Network::init] should be used to initialize our view of the network, and [NetworkManager]
 /// should be used in a background task to keep it up-to-date.
 #[derive(Clone)]
-pub(super) struct Network {
+pub(super) struct Network<RpcClient: PortalCensusRpc> {
     peers: Peers<AdditiveWeight>,
-    client: HttpClient,
+    client: Arc<RpcClient>,
     subnetwork: Subnetwork,
     filter_clients: Vec<ClientType>,
 }
 
-impl Network {
-    pub fn new(client: HttpClient, subnetwork: Subnetwork, bridge_config: &BridgeConfig) -> Self {
+impl<RpcClient: PortalCensusRpc> Network<RpcClient> {
+    pub fn new(
+        client: Arc<RpcClient>,
+        subnetwork: Subnetwork,
+        bridge_config: &BridgeConfig,
+    ) -> Self {
         if !matches!(
             subnetwork,
             Subnetwork::History | Subnetwork::Beacon | Subnetwork::State
@@ -97,7 +101,7 @@ impl Network {
         }
     }
 
-    pub fn create_manager(&self) -> NetworkManager {
+    pub fn create_manager(&self) -> NetworkManager<RpcClient> {
         NetworkManager::new(self.clone())
     }
 
@@ -278,14 +282,7 @@ impl Network {
     async fn ping(&self, enr: &Enr) -> anyhow::Result<PongInfo> {
         ensure!(self.is_eligible(enr), "ping: peer is filtered out");
 
-        match self.subnetwork {
-            Subnetwork::History => HistoryNetworkApiClient::ping(&self.client, enr.clone()),
-            Subnetwork::State => StateNetworkApiClient::ping(&self.client, enr.clone()),
-            Subnetwork::Beacon => BeaconNetworkApiClient::ping(&self.client, enr.clone()),
-            _ => unreachable!("ping: unsupported subnetwork: {}", self.subnetwork),
-        }
-        .await
-        .map_err(|err| anyhow!(err))
+        self.client.ping(enr.clone(), self.subnetwork).await
     }
 
     /// Fetches node's ENR.
@@ -308,38 +305,16 @@ impl Network {
     }
 
     async fn find_nodes(&self, enr: &Enr, distances: Vec<u16>) -> anyhow::Result<Vec<Enr>> {
-        match self.subnetwork {
-            Subnetwork::History => {
-                HistoryNetworkApiClient::find_nodes(&self.client, enr.clone(), distances)
-            }
-            Subnetwork::State => {
-                StateNetworkApiClient::find_nodes(&self.client, enr.clone(), distances)
-            }
-            Subnetwork::Beacon => {
-                BeaconNetworkApiClient::find_nodes(&self.client, enr.clone(), distances)
-            }
-            _ => unreachable!("find_nodes: unsupported subnetwork: {}", self.subnetwork),
-        }
-        .await
-        .map_err(|err| anyhow!(err))
+        self.client
+            .find_nodes(enr.clone(), distances, self.subnetwork)
+            .await
     }
 
     async fn recursive_find_nodes(&self, node_id: NodeId) -> anyhow::Result<Vec<Enr>> {
-        let enrs = match self.subnetwork {
-            Subnetwork::History => {
-                HistoryNetworkApiClient::recursive_find_nodes(&self.client, node_id).await?
-            }
-            Subnetwork::State => {
-                StateNetworkApiClient::recursive_find_nodes(&self.client, node_id).await?
-            }
-            Subnetwork::Beacon => {
-                BeaconNetworkApiClient::recursive_find_nodes(&self.client, node_id).await?
-            }
-            _ => unreachable!(
-                "recursive_find_nodes: unsupported subnetwork: {}",
-                self.subnetwork
-            ),
-        };
+        let enrs = self
+            .client
+            .recursive_find_nodes(node_id, self.subnetwork)
+            .await?;
         Ok(enrs
             .into_iter()
             .filter(|enr| self.is_eligible(enr))
@@ -360,17 +335,17 @@ pub enum NetworkAction {
 /// `NetworkManager` is responsible for keeping `Network`'s view of the network up to date.
 ///
 /// It should be used in a background task.
-pub(super) struct NetworkManager {
-    network: Network,
+pub(super) struct NetworkManager<RpcClient: PortalCensusRpc> {
+    network: Network<RpcClient>,
     peer_discovery_interval: Interval,
 }
 
-impl NetworkManager {
+impl<RpcClient: PortalCensusRpc> NetworkManager<RpcClient> {
     /// Configures how frequently to run recursive-find-nodes for a random NodeId in order to keep
     /// discovering new nodes.
     const PEER_DISCOVERY_INTERVAL: Duration = Duration::from_secs(60);
 
-    pub fn new(network: Network) -> Self {
+    pub fn new(network: Network<RpcClient>) -> Self {
         Self {
             network,
             peer_discovery_interval: tokio::time::interval(Self::PEER_DISCOVERY_INTERVAL),

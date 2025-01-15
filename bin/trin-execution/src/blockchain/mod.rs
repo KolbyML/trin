@@ -4,7 +4,7 @@ use anyhow::{anyhow, Ok};
 use tokio::sync::Mutex;
 
 use crate::{
-    storage::{evm_db::EvmDB, execution_position::ExecutionPositionV2},
+    storage::{execution_position::ExecutionPositionV2, state::evm_db::EvmDB},
     sync::{era::types::ProcessedBlock, service::SyncService},
 };
 

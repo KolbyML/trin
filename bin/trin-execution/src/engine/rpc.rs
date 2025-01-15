@@ -224,18 +224,11 @@ impl EngineApiServer for EngineRPCServer {
             "Received fork choice update 1  request {:?}",
             fork_choice_state
         );
-        // if payload_attributes is present, throw an error as we don't support block building right
-        // now
-        if payload_attributes.is_some() {
-            return Err(EngineApiError::ServerError(
-                "Trin Execution doesn't support block building for the time being.".to_string(),
-            )
-            .into());
-        }
 
         let (command_tx, command_rx) = oneshot::channel();
 
-        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+        let command =
+            EngineCommand::ForkChoice((fork_choice_state, payload_attributes, command_tx));
 
         self.engine_tx.send(command).map_err(|err| {
             EngineApiError::ServerError(format!(
@@ -267,18 +260,11 @@ impl EngineApiServer for EngineRPCServer {
             "Received fork choice update 2  request {:?}",
             fork_choice_state
         );
-        // if payload_attributes is present, throw an error as we don't support block building right
-        // now
-        if payload_attributes.is_some() {
-            return Err(EngineApiError::ServerError(
-                "Trin Execution doesn't support block building for the time being.".to_string(),
-            )
-            .into());
-        }
 
         let (command_tx, command_rx) = oneshot::channel();
 
-        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+        let command =
+            EngineCommand::ForkChoice((fork_choice_state, payload_attributes, command_tx));
 
         self.engine_tx.send(command).map_err(|err| {
             EngineApiError::ServerError(format!(
@@ -311,18 +297,10 @@ impl EngineApiServer for EngineRPCServer {
             fork_choice_state
         );
 
-        // if payload_attributes is present, throw an error as we don't support block building right
-        // now
-        if payload_attributes.is_some() {
-            return Err(EngineApiError::ServerError(
-                "Trin Execution doesn't support block building for the time being.".to_string(),
-            )
-            .into());
-        }
-
         let (command_tx, command_rx) = oneshot::channel();
 
-        let command = EngineCommand::ForkChoice((fork_choice_state, command_tx));
+        let command =
+            EngineCommand::ForkChoice((fork_choice_state, payload_attributes, command_tx));
 
         self.engine_tx.send(command).map_err(|err| {
             EngineApiError::ServerError(format!(

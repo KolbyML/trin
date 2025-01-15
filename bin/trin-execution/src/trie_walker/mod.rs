@@ -185,7 +185,7 @@ mod tests {
     use super::*;
     use crate::{
         config::StateConfig,
-        storage::{trie_db::TrieRocksDB, utils::setup_rocksdb},
+        storage::{state::trie_db::TrieRocksDB, utils::setup_rocksdb},
         sync::syncer::Syncer,
         utils::full_nibble_path_to_address_hash,
     };

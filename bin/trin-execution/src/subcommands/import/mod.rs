@@ -20,7 +20,8 @@ use crate::{
         genesis::import_genesis,
     },
     storage::{
-        account_db::AccountDB, evm_db::EvmDB, execution_position::ExecutionPositionV2,
+        execution_position::ExecutionPositionV2,
+        state::{account_db::AccountDB, evm_db::EvmDB},
         utils::setup_rocksdb,
     },
     subcommands::era2::utils::percentage_from_address_hash,
@@ -53,8 +54,12 @@ impl ImportBlocks {
         Ok(Self { evm_db })
     }
 
-    pub fn run(&mut self, import_blocks_config: ImportConfig) -> anyhow::Result<()> {
-        let mut block_executor = BlockExecutor::new(self.evm_db.clone(), false);
+    pub fn run(
+        &mut self,
+        import_blocks_config: ImportConfig,
+        save_blocks: bool,
+    ) -> anyhow::Result<()> {
+        let mut block_executor = BlockExecutor::new(self.evm_db.clone(), false, save_blocks);
 
         let chain_rlp_reader = ChainRlpReader::new(&import_blocks_config.path)?;
 

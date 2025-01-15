@@ -27,7 +27,7 @@ use crate::{
     metrics::{
         start_timer_vec, stop_timer, BUNDLE_COMMIT_PROCESSING_TIMES, TRANSACTION_PROCESSING_TIMES,
     },
-    storage::error::EVMError,
+    storage::state::error::EVMError,
 };
 
 fn start_commit_timer(name: &str) -> HistogramTimer {

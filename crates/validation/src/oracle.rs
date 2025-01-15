@@ -10,9 +10,10 @@ use ethportal_api::{
             endpoints::{BeaconEndpoint, HistoryEndpoint, StateEndpoint},
             request::{BeaconJsonRpcRequest, HistoryJsonRpcRequest, StateJsonRpcRequest},
         },
-        portal::GetContentInfo,
+        portal::{GetContentInfo, PongInfo},
+        portal_wire::OfferTrace,
     },
-    ContentValue, Enr, HistoryContentKey, HistoryContentValue,
+    ContentValue, Enr, HistoryContentKey, HistoryContentValue, StateContentKey, StateContentValue,
 };
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -210,6 +211,203 @@ impl HeaderOracle {
         let store: LightClientStore = serde_json::from_value(store)?;
 
         Ok(store)
+    }
+
+    /// Return PongInfo for history network.
+    pub async fn history_ping(&self, enr: Enr) -> anyhow::Result<PongInfo> {
+        let endpoint = HistoryEndpoint::Ping(enr);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = HistoryJsonRpcRequest { endpoint, resp };
+        let tx = self.history_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let pong_info = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("History network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from History network")),
+        };
+
+        let pong_info: PongInfo = serde_json::from_value(pong_info)?;
+
+        Ok(pong_info)
+    }
+
+    /// Return PongInfo for state network.
+    pub async fn state_ping(&self, enr: Enr) -> anyhow::Result<PongInfo> {
+        let endpoint = StateEndpoint::Ping(enr);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = StateJsonRpcRequest { endpoint, resp };
+        let tx = self.state_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let pong_info = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("State network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from State network")),
+        };
+
+        let pong_info: PongInfo = serde_json::from_value(pong_info)?;
+
+        Ok(pong_info)
+    }
+
+    /// Return PongInfo for beacon network.
+    pub async fn beacon_ping(&self, enr: Enr) -> anyhow::Result<PongInfo> {
+        let endpoint = BeaconEndpoint::Ping(enr);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = BeaconJsonRpcRequest { endpoint, resp };
+        let tx = self.beacon_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let pong_info = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("Beacon network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from Beacon network")),
+        };
+
+        let pong_info: PongInfo = serde_json::from_value(pong_info)?;
+
+        Ok(pong_info)
+    }
+
+    /// find nodes for history network.
+    pub async fn history_find_nodes(
+        &self,
+        enr: Enr,
+        distances: Vec<u16>,
+    ) -> anyhow::Result<Vec<Enr>> {
+        let endpoint = HistoryEndpoint::FindNodes(enr, distances);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = HistoryJsonRpcRequest { endpoint, resp };
+        let tx = self.history_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let enrs = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("History network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from History network")),
+        };
+
+        let enrs: Vec<Enr> = serde_json::from_value(enrs)?;
+
+        Ok(enrs)
+    }
+
+    /// find nodes for state network.
+    pub async fn state_find_nodes(
+        &self,
+        enr: Enr,
+        distances: Vec<u16>,
+    ) -> anyhow::Result<Vec<Enr>> {
+        let endpoint = StateEndpoint::FindNodes(enr, distances);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = StateJsonRpcRequest { endpoint, resp };
+        let tx = self.state_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let enrs = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("State network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from State network")),
+        };
+
+        let enrs: Vec<Enr> = serde_json::from_value(enrs)?;
+
+        Ok(enrs)
+    }
+
+    /// find nodes for beacon network.
+    pub async fn beacon_find_nodes(
+        &self,
+        enr: Enr,
+        distances: Vec<u16>,
+    ) -> anyhow::Result<Vec<Enr>> {
+        let endpoint = BeaconEndpoint::FindNodes(enr, distances);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = BeaconJsonRpcRequest { endpoint, resp };
+        let tx = self.beacon_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let enrs = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("Beacon network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from Beacon network")),
+        };
+
+        let enrs: Vec<Enr> = serde_json::from_value(enrs)?;
+
+        Ok(enrs)
+    }
+
+    /// recursive find nodes for history network.
+    pub async fn history_recursive_find_nodes(&self, node_id: NodeId) -> anyhow::Result<Vec<Enr>> {
+        let endpoint = HistoryEndpoint::RecursiveFindNodes(node_id);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = HistoryJsonRpcRequest { endpoint, resp };
+        let tx = self.history_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let enrs = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("History network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from History network")),
+        };
+
+        let enrs: Vec<Enr> = serde_json::from_value(enrs)?;
+
+        Ok(enrs)
+    }
+
+    /// recursive find nodes for state network.
+    pub async fn state_recursive_find_nodes(&self, node_id: NodeId) -> anyhow::Result<Vec<Enr>> {
+        let endpoint = StateEndpoint::RecursiveFindNodes(node_id);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = StateJsonRpcRequest { endpoint, resp };
+        let tx = self.state_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let enrs = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("State network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from State network")),
+        };
+
+        let enrs: Vec<Enr> = serde_json::from_value(enrs)?;
+
+        Ok(enrs)
+    }
+
+    /// recursive find nodes for beacon network.
+    pub async fn beacon_recursive_find_nodes(&self, node_id: NodeId) -> anyhow::Result<Vec<Enr>> {
+        let endpoint = BeaconEndpoint::RecursiveFindNodes(node_id);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = BeaconJsonRpcRequest { endpoint, resp };
+        let tx = self.beacon_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let enrs = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("Beacon network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from Beacon network")),
+        };
+
+        let enrs: Vec<Enr> = serde_json::from_value(enrs)?;
+
+        Ok(enrs)
+    }
+
+    /// trace offer for state network
+    pub async fn state_trace_offer(
+        &self,
+        enr: Enr,
+        content_key: StateContentKey,
+        content_value: StateContentValue,
+    ) -> anyhow::Result<OfferTrace> {
+        let endpoint = StateEndpoint::TraceOffer(enr, content_key, content_value);
+        let (resp, mut resp_rx) = mpsc::unbounded_channel::<Result<Value, String>>();
+        let request = StateJsonRpcRequest { endpoint, resp };
+        let tx = self.state_jsonrpc_tx()?;
+        tx.send(request)?;
+
+        let content = match resp_rx.recv().await {
+            Some(val) => val.map_err(|err| anyhow!("State network request error: {err:?}"))?,
+            None => return Err(anyhow!("No response from State network")),
+        };
+
+        let content: OfferTrace = serde_json::from_value(content)?;
+
+        Ok(content)
     }
 }
 
