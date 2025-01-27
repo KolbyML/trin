@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "bin/portal-bridge",
-    "bin/trin", 
+    "bin/trin",
+    "bin/trin-bench",
     "bin/trin-execution",
     "crates/ethportal-api",
     "crates/e2store",
@@ -15,7 +16,7 @@ members = [
     "crates/subnetworks/history",
     "crates/subnetworks/state",
     "crates/utils",
-    "crates/validation",    
+    "crates/validation",
     "testing/ef-tests",
     "testing/ethportal-peertest",
     "testing/utp",
@@ -120,3 +121,8 @@ trin-validation = { path = "crates/validation" }
 #
 # See: https://github.com/eira-fransham/crunchy/issues/13
 crunchy = "=0.2.2"
+
+
+[profile.profiling]
+inherits = "release"
+debug = true
