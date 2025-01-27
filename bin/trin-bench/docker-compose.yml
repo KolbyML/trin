@@ -1,0 +1,44 @@
+version: '3'
+services:
+  trin-sender:
+    hostname: trin-sender
+    image: portalnetwork/trin:latest
+    environment:
+      RUST_LOG: info
+    command: "--web3-transport http --web3-http-address http://0.0.0.0:8545/ --mb 0 --bootnodes none --external-address 192.168.1.10:9009"
+    restart: always
+    networks:
+      custom_net:
+        ipv4_address: 192.168.1.10
+  trin-receiver:
+    hostname: trin-receiver
+    image: portalnetwork/trin:latest
+    environment:
+      RUST_LOG: info
+    command: "--web3-transport http --web3-http-address http://0.0.0.0:8546/ --mb 10000 --bootnodes none --external-address 192.168.1.11:9009"
+    restart: always
+    networks:
+      custom_net:
+        ipv4_address: 192.168.1.11
+  trin-benchmark-cordinator:
+    hostname: trin-benchmark-cordinator
+    build:
+      context: ../..
+      dockerfile: ./bin/trin-bench/Dockerfile
+    environment:
+      RUST_LOG: info
+    command: "--web3-http-address-node-1 http://trin-sender:8545/ --web3-http-address-node-2 http://trin-receiver:8546/ --epoch-accumulator-path /portal-accumulators"
+    depends_on:
+      - trin-sender
+      - trin-receiver
+    restart: always
+    networks:
+      - custom_net    
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+networks:
+  custom_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24

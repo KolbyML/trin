@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "bin/portal-bridge",
-    "bin/trin", 
+    "bin/trin",
+    "bin/trin-bench",
     "bin/trin-execution",
     "crates/ethportal-api",
     "crates/e2store",
@@ -15,7 +16,7 @@ members = [
     "crates/subnetworks/history",
     "crates/subnetworks/state",
     "crates/utils",
-    "crates/validation",    
+    "crates/validation",
     "testing/ef-tests",
     "testing/ethportal-peertest",
     "testing/utp",

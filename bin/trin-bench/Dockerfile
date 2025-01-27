@@ -1,0 +1,43 @@
+# init final base
+FROM ubuntu AS final_base
+# These steps copy over the epoch accumulators repo for the bridge to use
+# This data is too large to be kept inside trin-source code
+# It must be downloaded separately and moved to the correct location
+# https://github.com/ethereum/portal-accumulators
+#
+# We do this step initially to cache the download of the accumulators
+RUN mkdir /portal-accumulators
+COPY ./portal-accumulators /portal-accumulators
+
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /app
+
+RUN apt-get update && apt-get install clang -y
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder 
+COPY --from=planner /app/recipe.json recipe.json
+
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Build application
+# Copy over all project folders specified in the .dockerignore
+COPY . .
+RUN cargo build --release --locked -p trin-bench
+
+# We do not need the Rust toolchain to run the binary!
+FROM final_base
+WORKDIR /app
+
+# copy build artifacts from build stage
+COPY --from=builder /app/target/release/trin-bench /usr/bin/
+
+RUN apt-get update && apt-get install libcurl4 ca-certificates -y
+
+ENV RUST_LOG=debug
+
+ENTRYPOINT ["/usr/bin/trin-bench"]
