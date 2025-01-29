@@ -11,7 +11,7 @@ use discv5::{
 use ethportal_api::types::distance::{Distance, Metric};
 use itertools::Itertools;
 use parking_lot::RwLock;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use super::node::Node;
 
@@ -315,6 +315,10 @@ impl SharedKBucketsTable {
             for content_id in content_ids {
                 let distance = TMetric::distance(content_id, &node.key.preimage().raw());
                 if distance <= node.value.data_radius {
+                    warn!(
+                        "Node {:?} is interested in radius {:?} with distance {}",
+                        node.value, node.value.data_radius, distance
+                    );
                     result
                         .entry(**content_id)
                         .or_default()
@@ -940,5 +944,10 @@ mod tests {
                 vec![enr_max_connected],
             );
         }
+    }
+
+    #[test]
+    fn hiii() {
+        panic!("hii {:?}", Distance::MAX);
     }
 }

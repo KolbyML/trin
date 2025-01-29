@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread::sleep};
+use std::{sync::Arc, thread::sleep, time::Instant};
 
 use clap::Parser;
 use e2store::{era1::Era1, utils::get_era1_files};
@@ -7,6 +7,7 @@ use ethportal_api::{
     HistoryContentKey, HistoryContentValue, HistoryNetworkApiClient, Receipts,
 };
 use futures::future::join_all;
+use humanize_duration::{prelude::DurationExt, Truncate};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use portal_bridge::{
     api::execution::construct_proof,
@@ -28,6 +29,11 @@ use trin_validation::{constants::EPOCH_SIZE, oracle::HeaderOracle};
 async fn main() -> anyhow::Result<()> {
     init_tracing_logger();
 
+    let start_timer = Instant::now();
+    let mut offer_count = 0;
+
+    sleep(std::time::Duration::from_secs(10));
+
     let trin_bench_config = TrinBenchConfig::parse();
     let send_node_client = HttpClientBuilder::default()
         .build(trin_bench_config.web3_http_address_node_1.clone())
@@ -42,6 +48,9 @@ async fn main() -> anyhow::Result<()> {
         Err(err) => panic!("Error getting receiver_node_enr: {err:?}"),
     };
 
+    // ping receiver node, to exchange radius's, as if we just start with offers, the other node will assume a 100% radius by default
+    send_node_client.ping(receiver_node_enr.clone()).await?;
+
     let http_client = Client::new();
     let era1_files = get_era1_files(&http_client).await?;
     let mut blocks = vec![];
@@ -53,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // gossip blocks to receiver node
-    let gossip_semaphore = Arc::new(Semaphore::new(5));
+    let gossip_semaphore = Arc::new(Semaphore::new(10));
     let header_oracle = HeaderOracle::default();
 
     let mut epoch_acc = None;
@@ -106,8 +115,7 @@ async fn main() -> anyhow::Result<()> {
             content_value,
             Some(permit),
         ));
-
-        sleep(std::time::Duration::from_secs(3));
+        offer_count += 1;
     }
 
     // gossip bodies
@@ -131,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
             content_value,
             Some(permit),
         ));
+        offer_count += 1;
     }
 
     // gossip receipts
@@ -152,11 +161,18 @@ async fn main() -> anyhow::Result<()> {
             content_value,
             Some(permit),
         ));
+        offer_count += 1;
     }
 
     // Wait till all blocks are done gossiping.
     // This can't deadlock, because the tokio::spawn has a timeout.
     join_all(serve_full_block_handles).await;
+
+    info!(
+        "Finished gossiping blocks in {}, with {} offers",
+        start_timer.elapsed().human(Truncate::Second),
+        offer_count
+    );
 
     Ok(())
 }
@@ -203,7 +219,7 @@ async fn offer_content(
     if OfferTrace::Declined == result || OfferTrace::Failed == result {
         warn!("Error offering content: {enr:?} ||| {result:?}");
     } else {
-        info!("Successful offer: {content_key:?} ||| {enr:?}");
+        // info!("Successful offer: {content_key:?} ||| {enr:?}");
     }
 
     Ok(())

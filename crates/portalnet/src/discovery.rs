@@ -316,6 +316,12 @@ impl Discovery {
         subnetwork: Subnetwork,
         request: ProtocolRequest,
     ) -> Result<Bytes, RequestError> {
+        if request.len() > 1280 {
+            warn!(
+                "send_talk_req() request size exceeds 1280 bytes: enr={}, subnetwork={}, request={}",
+                enr, subnetwork, hex::encode(&request)
+            );
+        }
         // Send empty protocol id if unable to convert it to bytes
         let protocol = match self
             .network_spec

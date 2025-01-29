@@ -16,6 +16,7 @@ clap.workspace = true
 ethportal-api.workspace = true
 e2store.workspace = true
 futures.workspace = true
+humanize-duration.workspace = true
 jsonrpsee.workspace = true
 portal-bridge.workspace = true
 reqwest.workspace = true

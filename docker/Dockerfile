@@ -16,7 +16,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 # Copy over all project folders specified in the .dockerignore
 COPY . .
-RUN cargo build --release --locked --bin trin
+RUN cargo build --release --bin trin
 
 # We do not need the Rust toolchain to run the binary!
 FROM ubuntu AS runtime
@@ -24,7 +24,5 @@ WORKDIR /app
 
 # copy build artifacts from build stage
 COPY --from=builder /app/target/release/trin /usr/bin/
-
-ENV RUST_LOG=debug
 
 ENTRYPOINT ["/usr/bin/trin"]

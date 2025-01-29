@@ -4,7 +4,7 @@ use ethportal_api::{types::distance::Distance, OverlayContentKey, RawContentValu
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{named_params, types::Type, OptionalExtension};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use trin_metrics::storage::StorageMetricsReporter;
 
 use super::{
@@ -105,7 +105,7 @@ impl<TContentKey: OverlayContentKey> IdIndexedV1Store<TContentKey> {
         self.init_usage_stats()?;
 
         if self.pruning_strategy.should_prune(&self.usage_stats) {
-            debug!(
+            info!(
                 Db = %self.config.content_type,
                 "High storage usage ({}) -> Pruning",
                 self.usage_stats.total_entry_size_bytes,
@@ -116,7 +116,7 @@ impl<TContentKey: OverlayContentKey> IdIndexedV1Store<TContentKey> {
             .pruning_strategy
             .is_usage_above_target_capacity(&self.usage_stats)
         {
-            debug!(
+            info!(
                 Db = %self.config.content_type,
                 "Used capacity ({}) is above target capacity ({}) -> Using distance to farthest for radius",
                 self.usage_stats.total_entry_size_bytes,
@@ -124,14 +124,14 @@ impl<TContentKey: OverlayContentKey> IdIndexedV1Store<TContentKey> {
             );
             self.set_radius_to_farthest()?;
         } else if self.config.storage_capacity_bytes == 0 {
-            debug!(
+            info!(
                 Db = %self.config.content_type,
                 "Storage capacity is 0 -> Using ZERO radius",
             );
             self.radius = Distance::ZERO;
             self.metrics.report_radius(self.radius);
         } else {
-            debug!(
+            info!(
                 Db = %self.config.content_type,
                 "Used capacity ({}) is below target capacity ({}) -> Using MAX radius",
                 self.usage_stats.total_entry_size_bytes,

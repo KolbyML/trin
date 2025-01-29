@@ -96,7 +96,7 @@ tree_hash_derive = "0.8.0"
 uds_windows = "1.0.1"
 ureq = { version = "2.5.0", features = ["json"] }
 url = "2.3.1"
-utp-rs = { tag = "v0.1.0-alpha.14", git = "https://github.com/ethereum/utp" }
+utp-rs = { rev = "dea8dfc4f30d6b2bd3fb4914f78bd60c7fc3f6b7", git = "https://github.com/KolbyML/utp" }
 
 # Trin workspace crates
 e2store = { path = "crates/e2store" }
