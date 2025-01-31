@@ -2,11 +2,12 @@ use anyhow::anyhow;
 use ssz::Encode;
 use ssz_derive::{Decode, Encode};
 use ssz_types::{typenum::U300, VariableList};
+use std::fmt::Debug;
 
 use crate::types::portal_wire::CustomPayload;
 
 /// Used to respond to pings which the node can't handle
-#[derive(PartialEq, Debug, Clone, Encode, Decode)]
+#[derive(PartialEq, Clone, Encode, Decode)]
 pub struct PingError {
     pub error_code: u16,
     pub message: VariableList<u8, U300>,
@@ -27,6 +28,20 @@ impl PingError {
                 anyhow!("PingError can only handle messages up to 300 bytes, received {err:?}")
             })?,
         })
+    }
+}
+
+impl Debug for PingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string = String::from_utf8(self.message.to_vec())
+            .map_err(|_| {
+                ssz::DecodeError::BytesInvalid(format!("Invalid utf8 string: {:?}", self.message))
+            })
+            .map_err(|_| std::fmt::Error)?;
+        f.debug_struct("PingError")
+            .field("error_code", &self.error_code)
+            .field("message", &string)
+            .finish()
     }
 }
 

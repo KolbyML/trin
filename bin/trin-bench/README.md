@@ -3,5 +3,5 @@ Trin bench is for testing Trin performance and being able to recreate situations
 
 ## To run
 ```sh
-docker-compose down -v && docker compose up --abort-on-container-exit
+docker-compose down -v && docker compose up --abort-on-container-exit --timeout 600 --build
 ```

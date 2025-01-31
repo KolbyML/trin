@@ -32,6 +32,8 @@ pub fn address_to_nibble_path(address: Address) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
+
     use alloy::hex::FromHex;
     use eth_trie::nibbles::Nibbles as EthNibbles;
     use revm_primitives::{keccak256, Address, B256};
@@ -69,5 +71,7 @@ mod tests {
             B256::from_hex("0xff01020300000000000000000000000000000000000000000000000000000000")
                 .unwrap()
         );
+
+        panic!("Test not implemented {}", B256::ZERO.to_string());
     }
 }

@@ -121,3 +121,18 @@ trin-validation = { path = "crates/validation" }
 #
 # See: https://github.com/eira-fransham/crunchy/issues/13
 crunchy = "=0.2.2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+debug = "none"
+strip = "symbols"
+panic = "unwind"
+codegen-units = 16
+
+# Use the `--profile profiling` flag to show symbols in release mode.
+# e.g. `cargo build --profile profiling`
+[profile.profiling]
+inherits = "release"
+debug = "full"
+strip = "none"

@@ -2,36 +2,53 @@ version: '3'
 services:
   trin-sender:
     hostname: trin-sender
+    stop_signal: SIGINT
     build:
       context: ../..
-      dockerfile: ./docker/Dockerfile    
+      dockerfile: ./bin/trin-bench/Dockerfile.trin
     image: portalnetwork/trin:latest
+    volumes:
+      - ./flamegraph_sender:/tmp/perf
     environment:
       - RUST_LOG=info
     command: "--web3-transport http --web3-http-address http://0.0.0.0:8545/ --mb 0 --bootnodes none --external-address 192.168.1.10:9009"
     networks:
       custom_net:
         ipv4_address: 192.168.1.10
+    privileged: true  # Flamegraph requires perf, which needs privileged mode
+    cap_add:
+      - SYS_ADMIN  # Required for perf tool
+    security_opt:
+      - seccomp=unconfined  # Necessary for `perf`
   trin-receiver:
     hostname: trin-receiver
+    stop_signal: SIGINT
     build:
       context: ../..
-      dockerfile: ./docker/Dockerfile    
+      dockerfile: ./bin/trin-bench/Dockerfile.trin    
     image: portalnetwork/trin:latest
+    volumes:
+      - ./flamegraph_receiver:/tmp/perf
     environment:
       - RUST_LOG=info
     command: "--web3-transport http --web3-http-address http://0.0.0.0:8546/ --mb 10000 --bootnodes none --external-address 192.168.1.11:9009"
     networks:
       custom_net:
         ipv4_address: 192.168.1.11
+    privileged: true  # Flamegraph requires perf, which needs privileged mode
+    cap_add:
+      - SYS_ADMIN  # Required for perf tool
+    security_opt:
+      - seccomp=unconfined  # Necessary for `perf`
   trin-benchmark-cordinator:
     hostname: trin-benchmark-cordinator
+    stop_signal: SIGINT
     build:
       context: ../..
       dockerfile: ./bin/trin-bench/Dockerfile
     environment:
       - RUST_LOG=info
-    command: "--web3-http-address-node-1 http://192.168.1.10:8545/ --web3-http-address-node-2 http://192.168.1.11:8546/ --epoch-accumulator-path /portal-accumulators --start-era1 1000 --end-era1 1010"
+    command: "--web3-http-address-node-1 http://192.168.1.10:8545/ --web3-http-address-node-2 http://192.168.1.11:8546/ --epoch-accumulator-path /portal-accumulators --start-era1 1000 --end-era1 1000"
     depends_on:
       - trin-sender
       - trin-receiver
