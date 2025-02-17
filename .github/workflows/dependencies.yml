@@ -12,7 +12,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  BRANCH: cargo-update
+  BRANCH: cargo-update2
   TITLE: "chore(deps): weekly `cargo update`"
   BODY: |
     Automation to keep dependencies in `Cargo.lock` current.
