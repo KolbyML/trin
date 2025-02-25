@@ -13,7 +13,7 @@ use anyhow::{bail, ensure};
 use eth_trie::{RootWithTrieDiff, Trie};
 use revm::inspectors::TracerEip3155;
 use tokio::sync::{broadcast, mpsc::UnboundedSender, oneshot::error::TryRecvError, Mutex};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use super::block::event::BlockEvent;
 use crate::{
@@ -87,15 +87,16 @@ impl BlockingSyncer {
         };
 
         loop {
+            error!("test 1");
             block_executor
                 .execute_block_with_tracer(&block, |tx| self.create_tracer(&block.header, tx))?;
 
             // Commit and return if we reached last block or stop signal is received.
             let stop_signal_received = self.stop_signal.blocking_lock().try_recv().is_ok();
-
+            error!("test 2");
             // Fetch next block
             let next_block = self.fetch_next_block()?;
-
+            error!("test 3");
             if Some(block.header.number) == debug_last_block
                 || stop_signal_received
                 || next_block == SyncStatus::Finished
@@ -175,6 +176,7 @@ impl BlockingSyncer {
                 SyncStatus::Finished => panic!("We checked that SyncStatus is not Finished above, so if this panics it's a bug"),
                 SyncStatus::ConsensusClientIsSyncing => unreachable!("This case is handled in fetch_next_block")
             };
+            error!("test 4");
         }
     }
 
