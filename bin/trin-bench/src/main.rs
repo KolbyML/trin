@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread::sleep, time::Instant};
+use std::{path::Path, sync::Arc, thread::sleep, time::Instant};
 
 use clap::Parser;
 use e2store::{era1::Era1, utils::get_era1_files};
@@ -15,6 +15,8 @@ use portal_bridge::{
 };
 use reqwest::Client;
 use tokio::{
+    fs::{create_dir_all, read, File},
+    io::AsyncWriteExt,
     sync::{OwnedSemaphorePermit, Semaphore},
     task::JoinHandle,
     time::timeout,
@@ -48,14 +50,44 @@ async fn main() -> anyhow::Result<()> {
 
     // ping receiver node, to exchange radius's, as if we just start with offers, the other node
     // will assume a 100% radius by default
-    send_node_client.ping(receiver_node_enr.clone()).await?;
+    HistoryNetworkApiClient::ping(&send_node_client, receiver_node_enr.clone()).await?;
+
+    // let http_client = Client::new();
+    // let era1_files = get_era1_files(&http_client).await?;
+    // let mut blocks = vec![];
+    // for era1_index in trin_bench_config.start_era1..=trin_bench_config.end_era1 {
+    //     let era1_path = era1_files[&(era1_index as u64)].clone();
+    //     let raw_era1 = download_raw_era(era1_path, http_client.clone()).await?;
+    //     let block_tuples = Era1::deserialize(&raw_era1)?;
+    //     blocks.extend(block_tuples.block_tuples);
+    // }
 
     let http_client = Client::new();
     let era1_files = get_era1_files(&http_client).await?;
+    let local_cache_dir = "./logs/era1_cache"; // Define the local cache directory
+
+    // Ensure the cache directory exists
+    create_dir_all(local_cache_dir).await?;
+
     let mut blocks = vec![];
     for era1_index in trin_bench_config.start_era1..=trin_bench_config.end_era1 {
         let era1_path = era1_files[&(era1_index as u64)].clone();
-        let raw_era1 = download_raw_era(era1_path, http_client.clone()).await?;
+        let file_name = format!("era1_{}.bin", era1_index);
+        let local_file_path = format!("{}/{}", local_cache_dir, file_name);
+
+        let raw_era1 = if Path::new(&local_file_path).exists() {
+            // Load from disk if already downloaded
+            println!("Loading {} from disk", local_file_path);
+            read(&local_file_path).await?
+        } else {
+            // Download and save to disk if not available
+            println!("Downloading {}", era1_path);
+            let data = download_raw_era(era1_path, http_client.clone()).await?;
+            let mut file = File::create(&local_file_path).await?;
+            file.write_all(&data).await?;
+            data.to_vec()
+        };
+
         let block_tuples = Era1::deserialize(&raw_era1)?;
         blocks.extend(block_tuples.block_tuples);
     }

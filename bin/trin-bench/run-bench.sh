@@ -86,7 +86,7 @@ run_trin() {
         # RUST_LOG=info,utp_rs=trace 
         # samply record -s -o $log_file.json.gz -- 
         # TOKIO_CONSOLE_BUFFER_CAPACITY=2000000 TRACING_CONSOLE_PORT=5554 
-        ./../../target/profiling/trin \
+        samply record -s -o $log_file.json.gz -- ./../../target/profiling/trin \
             --web3-transport http \
             --web3-http-address "$web3_address" \
             --mb "$mb" \
@@ -123,7 +123,7 @@ run_trinr() {
         # RUST_LOG=info,utp_rs=trace 
         # samply record -s -o $log_file.json.gz -- 
         # TOKIO_CONSOLE_BUFFER_CAPACITY=2000000 TRACING_CONSOLE_PORT=5555 
-        ./../../target/profiling/trin \
+        samply record -s -o $log_file.json.gz -- ./../../target/profiling/trin \
             --web3-transport http \
             --web3-http-address "$web3_address" \
             --mb "$mb" \
