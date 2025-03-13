@@ -12,6 +12,7 @@ mkdir -p "$LOG_DIR/$DATA_DIR_SENDER" "$LOG_DIR/$DATA_DIR_RECEIVER"
 
 # Check first argument: portal client selection
 PORTAL_CLIENT="$1"
+BENCH_MODE="$2"
 VALID_CLIENTS=("trin" "fluffy" "shisui" "ultralight" "samba")
 if [[ ! " ${VALID_CLIENTS[@]} " =~ " $PORTAL_CLIENT " ]]; then
     echo "Error: Invalid portal client specified. Choose from: ${VALID_CLIENTS[*]}"
@@ -138,22 +139,46 @@ run_trinr() {
 }
 
 if [ "$PORTAL_CLIENT" == "trin" ]; then
-    # Run trin sender
-    run_trin "$LOG_DIR/$DATA_DIR_SENDER" "http://127.0.0.1:$PORT_SENDER/" "127.0.0.1:$EXT_PORT_SENDER" "$EXT_PORT_SENDER" "$LOG_DIR/$DATA_DIR_SENDER" "0"
+    if [ "$BENCH_MODE" == "put" ]; then
+        # Run trin sender
+        run_trin "$LOG_DIR/$DATA_DIR_SENDER" "http://127.0.0.1:$PORT_SENDER/" "127.0.0.1:$EXT_PORT_SENDER" "$EXT_PORT_SENDER" "$LOG_DIR/$DATA_DIR_SENDER" "0"
 
-    # Run trin receiver
-    run_trinr "$LOG_DIR/$DATA_DIR_RECEIVER" "http://127.0.0.1:$PORT_RECEIVER/" "127.0.0.1:$EXT_PORT_RECEIVER" "$EXT_PORT_RECEIVER" "$LOG_DIR/$DATA_DIR_RECEIVER" "10000"
+        # Run trin receiver
+        run_trinr "$LOG_DIR/$DATA_DIR_RECEIVER" "http://127.0.0.1:$PORT_RECEIVER/" "127.0.0.1:$EXT_PORT_RECEIVER" "$EXT_PORT_RECEIVER" "$LOG_DIR/$DATA_DIR_RECEIVER" "10000"
+    elif [ "$BENCH_MODE" == "get" ]; then
+        # Run trin sender
+        run_trin "$LOG_DIR/$DATA_DIR_SENDER" "http://127.0.0.1:$PORT_SENDER/" "127.0.0.1:$EXT_PORT_SENDER" "$EXT_PORT_SENDER" "$LOG_DIR/$DATA_DIR_SENDER" "10000"
+
+        # Run trin receiver
+        run_trinr "$LOG_DIR/$DATA_DIR_RECEIVER" "http://127.0.0.1:$PORT_RECEIVER/" "127.0.0.1:$EXT_PORT_RECEIVER" "$EXT_PORT_RECEIVER" "$LOG_DIR/$DATA_DIR_RECEIVER" "0"
+    else 
+        echo "Error: Invalid bench mode specified. Choose from: put, get"
+    fi
 fi
 
 # Run trin benchmark coordinator
-../../target/release/trin-bench \
-    --web3-http-address-node-1 http://127.0.0.1:$PORT_SENDER/ \
-    --web3-http-address-node-2 http://127.0.0.1:$PORT_RECEIVER/ \
-    --epoch-accumulator-path ../../portal-accumulators \
-    --start-era1 1000 \
-    --end-era1 1010 \
-    --offer-concurrency 10 \
-    > "$LOG_DIR/trin_benchmark.log" 2>&1 &
+if [ "$BENCH_MODE" == "put" ]; then
+    ../../target/release/trin-bench \
+        --web3-http-address-node-1 http://127.0.0.1:$PORT_SENDER/ \
+        --web3-http-address-node-2 http://127.0.0.1:$PORT_RECEIVER/ \
+        --epoch-accumulator-path ../../portal-accumulators \
+        --start-era1 1000 \
+        --end-era1 1010 \
+        --offer-concurrency 10 \
+        > "$LOG_DIR/trin_benchmark.log" 2>&1 &
+elif [ "$BENCH_MODE" == "get" ]; then
+    ../../target/release/trin-bench \
+        --web3-http-address-node-1 http://127.0.0.1:$PORT_SENDER/ \
+        --web3-http-address-node-2 http://127.0.0.1:$PORT_RECEIVER/ \
+        --epoch-accumulator-path ../../portal-accumulators \
+        --start-era1 1000 \
+        --end-era1 1010 \
+        --offer-concurrency 10 \
+        --bench-mode get \
+        > "$LOG_DIR/trin_benchmark.log" 2>&1 &
+else 
+    echo "Error: Invalid bench mode specified. Choose from: put, get"
+fi
 TRIN_BENCH_PID=$!
 
 echo "Started Benchmark"

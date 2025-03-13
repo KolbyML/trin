@@ -47,4 +47,23 @@ pub struct TrinBenchConfig {
         default_value = "10"
     )]
     pub offer_concurrency: usize,
+
+    #[arg(long, value_parser = bench_mode_parser, default_value = "put")]
+    pub bench_mode: BenchMode,
+}
+
+#[derive(Parser, Debug, Clone)]
+pub enum BenchMode {
+    Put,
+    Get,
+}
+
+pub fn bench_mode_parser(string: &str) -> Result<BenchMode, String> {
+    match string {
+        "put" => Ok(BenchMode::Put),
+        "get" => Ok(BenchMode::Get),
+        _ => Err(format!(
+            "Not a valid bench mode: {string}, must be 'put' or 'get'"
+        )),
+    }
 }
