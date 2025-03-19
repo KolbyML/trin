@@ -1,4 +1,7 @@
+use core::panic;
+
 use anyhow::{anyhow, ensure};
+use ethportal_api::utils::bytes::hex_encode;
 use ssz_derive::{Decode, Encode};
 
 /// Represents an e2store `Entry`
@@ -119,6 +122,11 @@ impl Default for VersionEntry {
             version: Entry::new(0x3265, vec![]),
         }
     }
+}
+
+#[test]
+fn hi() {
+    panic!("hi {:?}", hex_encode(vec![0x65, 0x32]));
 }
 
 impl TryFrom<&Entry> for VersionEntry {

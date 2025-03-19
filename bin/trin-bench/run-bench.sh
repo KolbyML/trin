@@ -150,7 +150,7 @@ if [ "$PORTAL_CLIENT" == "trin" ]; then
         run_trin "$LOG_DIR/$DATA_DIR_SENDER" "http://127.0.0.1:$PORT_SENDER/" "127.0.0.1:$EXT_PORT_SENDER" "$EXT_PORT_SENDER" "$LOG_DIR/$DATA_DIR_SENDER" "10000"
 
         # Run trin receiver
-        run_trinr "$LOG_DIR/$DATA_DIR_RECEIVER" "http://127.0.0.1:$PORT_RECEIVER/" "127.0.0.1:$EXT_PORT_RECEIVER" "$EXT_PORT_RECEIVER" "$LOG_DIR/$DATA_DIR_RECEIVER" "0"
+        run_trinr "$LOG_DIR/$DATA_DIR_RECEIVER" "http://127.0.0.1:$PORT_RECEIVER/" "127.0.0.1:$EXT_PORT_RECEIVER" "$EXT_PORT_RECEIVER" "$LOG_DIR/$DATA_DIR_RECEIVER" "10000"
     else 
         echo "Error: Invalid bench mode specified. Choose from: put, get"
     fi
@@ -173,7 +173,7 @@ elif [ "$BENCH_MODE" == "get" ]; then
         --epoch-accumulator-path ../../portal-accumulators \
         --start-era1 1000 \
         --end-era1 1010 \
-        --offer-concurrency 10 \
+        --offer-concurrency 20 \
         --bench-mode get \
         > "$LOG_DIR/trin_benchmark.log" 2>&1 &
 else 

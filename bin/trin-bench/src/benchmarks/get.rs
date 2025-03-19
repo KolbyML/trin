@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 use e2store::era1::BlockTuple;
 use ethportal_api::{
@@ -28,14 +32,14 @@ pub struct BenchGet {
 impl BenchGet {
     pub async fn run(&self) -> anyhow::Result<()> {
         info!("Preparring get benchmark");
-        let receiver_node_enr = match self.send_node_client.node_info().await {
+        let sender_node_enr = match self.send_node_client.node_info().await {
             Ok(node_info) => node_info.enr,
-            Err(err) => panic!("Error getting receiver_node_enr: {err:?}"),
+            Err(err) => panic!("Error getting sender_node_enr: {err:?}"),
         };
 
         // ping receiver node, to exchange radius's, as if we just start with offers, the other node
         // will assume a 100% radius by default
-        HistoryNetworkApiClient::ping(&self.send_node_client, receiver_node_enr.clone()).await?;
+        HistoryNetworkApiClient::ping(&self.send_node_client, sender_node_enr.clone()).await?;
         let mut stored_content = 0;
 
         let header_oracle = HeaderOracle::default();
@@ -171,8 +175,8 @@ impl BenchGet {
             let content_key =
                 HistoryContentKey::new_block_header_by_hash(block.header.header.hash());
             serve_full_block_handles.push(spawn_find_content(
-                self.send_node_client.clone(),
-                receiver_node_enr.clone(),
+                self.receiver_node_client.clone(),
+                sender_node_enr.clone(),
                 content_key,
                 Some(permit),
             ));
@@ -189,8 +193,8 @@ impl BenchGet {
 
             let content_key = HistoryContentKey::new_block_body(block.header.header.hash());
             serve_full_block_handles.push(spawn_find_content(
-                self.send_node_client.clone(),
-                receiver_node_enr.clone(),
+                self.receiver_node_client.clone(),
+                sender_node_enr.clone(),
                 content_key,
                 Some(permit),
             ));
@@ -207,8 +211,8 @@ impl BenchGet {
 
             let content_key = HistoryContentKey::new_block_receipts(block.header.header.hash());
             serve_full_block_handles.push(spawn_find_content(
-                self.send_node_client.clone(),
-                receiver_node_enr.clone(),
+                self.receiver_node_client.clone(),
+                sender_node_enr.clone(),
                 content_key,
                 Some(permit),
             ));
@@ -224,6 +228,8 @@ impl BenchGet {
             start_timer.elapsed().human(Truncate::Second),
             content_fetched
         );
+
+        sleep(Duration::from_secs(60));
         Ok(())
     }
 }
